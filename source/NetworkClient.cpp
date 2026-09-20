@@ -29,7 +29,7 @@ void NetworkClient::Poll()
 	HandlePacket(packet.data(), packet.size());
 }
 
-void NetworkClient::SendInput(int steering, bool thrust, bool fire)
+void NetworkClient::SendInput(uint32_t buttons, float thrust, float turn)
 {
 	if(!connected)        
 	return;
