@@ -31,6 +31,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "GameLoadingPanel.h"
 #include "GameVersion.h"
 #include "GameWindow.h"
+#include "GameModel.h"
 #include "Interface.h"
 #include "Logger.h"
 #include "MainPanel.h"
@@ -86,8 +87,7 @@ using namespace std;
 
 void PrintHelp();
 void PrintVersion();
-void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation,
-	const string &testToRun, bool debugMode);
+void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRun, bool debugMode);
 Conversation LoadConversation(const PlayerInfo &player);
 void PrintTestsTable();
 
@@ -291,8 +291,7 @@ int main(int argc, char *argv[])
 
 
 
-void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation,
-		const string &testToRunName, bool debugMode)
+void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRunName, bool debugMode)
 {
 	// gamePanels is used for the main panel where you fly your spaceship.
 	// All other game content related dialogs are placed on top of the gamePanels.
@@ -309,6 +308,9 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	// tests to run.
 	bool dataFinishedLoading = false;
 	menuPanels.Push(new GameLoadingPanel(player, queue, conversation, gamePanels, dataFinishedLoading));
+
+	GameModel game;
+	NetworkSession networkSession(game);
 
 	bool showCursor = true;
 	int cursorTime = 0;
@@ -327,8 +329,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 
 	const bool isHeadless = (testContext.CurrentTest() && !debugMode);
 
-	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused,
-			&isFastForward]
+	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
 	{
 		const Preferences::FastForwardCapsLockSync fastforwardCapsLockSync = Preferences::GetFastForwardCapsLockSync();
 		const bool fastForwardSyncToCapsLock = fastforwardCapsLockSync == Preferences::FastForwardCapsLockSync::ALWAYS
@@ -405,6 +406,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	// Game loop when running the game normally.
 	if(!testContext.CurrentTest())
 	{
+
 		// How much time in total was spent on calculations and drawing since the last
 		// load cache update (every 60 drawing frames; usually 1 second).
 		chrono::steady_clock::duration cpuLoadSum{};
@@ -550,6 +552,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 				isPerformanceDisplayReady = false;
 			}
 
+			networkSession.Poll();
 			GameWindow::Step();
 
 			// Lock the game loop to 60 FPS.
@@ -621,8 +624,6 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	if(player.GetPlanet() && gamePanels.CanSave())
 		player.Save();
 }
-
-
 
 void PrintHelp()
 {
