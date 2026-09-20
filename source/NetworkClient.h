@@ -2,6 +2,7 @@
 
 #include "NetworkSnapshot.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -25,5 +26,7 @@ public:
     bool IsConnected() const;
 
 private:
+	void HandlePacket(const uint8_t *data, size_t size);
 	SnapshotHandler snapshotHandler;
+	bool connected = false;
 };
