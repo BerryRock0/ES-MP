@@ -300,10 +300,9 @@ void GameWindow::Quit()
 
 
 
-void GameWindow::Step(NetworkSession& networkSession)
+void GameWindow::Step()
 {
 	SDL_GL_SwapWindow(mainWindow);
-	networkSession::Poll();
 }
 
 void GameWindow::AdjustViewport(bool noResizeEvent)
