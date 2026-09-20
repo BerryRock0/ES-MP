@@ -1,9 +1,14 @@
 // NetworkSession.cpp
 #include "NetworkSession.h"
 #include "GameModel.h"
+
 #include "NetworkClient.h"
 
-NetworkSession::NetworkSession(GameModel &game) : game(game) {}
+#include <memory>
+#include <utility>
+
+NetworkSession::NetworkSession(GameModel &game) : game(game)
+{}
 
 NetworkSession::~NetworkSession()
 {    
@@ -50,7 +55,6 @@ void NetworkSession::Poll()
 
 bool NetworkSession::IsConnected()
 {
-	return client && client->IsConnected();
 	return state == State::Connected && client && client->IsConnected();
 }
 
