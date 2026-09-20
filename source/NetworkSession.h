@@ -30,6 +30,8 @@ public:
     bool Connect(const std::string &host, uint16_t port);
 
     void Disconnect();
+	void Poll();
+	bool IsConnected() const;
     void Update(double deltaTime);
     void SendPlayerInput(uint32_t buttons, float thrust, float turn);
 
