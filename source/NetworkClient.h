@@ -1,3 +1,11 @@
+#pragma once
+
+#include "NetworkSnapshot.h"
+
+#include <cstdint>
+#include <functional>
+#include <string>
+
 class NetworkClient
 {
 public:
