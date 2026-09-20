@@ -231,6 +231,12 @@ target_sources(EndlessSkyLib PRIVATE
 	NPC.h
 	NPCAction.cpp
 	NPCAction.h
+	NetworkClient.cpp
+	NetworkClient.h
+	NetworkSession.cpp
+	NetworkSession.h
+	NetworkSnapshot.cpp
+	NetworkSnapshot.h
 	News.cpp
 	News.h
 	OptionalInputDialogPanel.cpp
