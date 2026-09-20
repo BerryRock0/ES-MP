@@ -48,6 +48,11 @@ void NetworkSession::Disconnect()
 	state = State::Offline;
 }
 
+NetworkSession::State NetworkSession::GetState() const
+{    
+	return state;
+}
+
 void NetworkSession::Poll()
 {
 	if(client)
