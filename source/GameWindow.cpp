@@ -302,6 +302,7 @@ void GameWindow::Quit()
 void GameWindow::Step()
 {
 	SDL_GL_SwapWindow(mainWindow);
+	NetworkSession::Poll();
 }
 
 
