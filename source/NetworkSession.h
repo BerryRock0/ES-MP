@@ -2,9 +2,11 @@
 #pragma once
 
 #include "NetworkSnapshot.h"
+#include "NetworkClient.h"
 
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 
 class GameModel;
@@ -24,14 +26,10 @@ public:
     ~NetworkSession();
 
     bool Connect(const std::string &host, uint16_t port);
+
     void Disconnect();
-
     void Update(double deltaTime);
-
-    void SendPlayerInput(
-        uint32_t buttons,
-        float thrust,
-        float turn);
+    void SendPlayerInput(uint32_t buttons, float thrust, float turn);
 
     State GetState() const;
 
