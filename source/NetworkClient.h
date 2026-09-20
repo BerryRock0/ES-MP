@@ -15,13 +15,9 @@ public:
 	explicit NetworkClient(SnapshotHandler handler);
 
     bool Connect(const std::string &host, uint16_t port);
+	void Poll();
+	void SendInput(uint32_t buttons, float thrust, float turn);
     void Disconnect();
-    void Poll();
-
-    void SendInput(
-        int steering,
-        bool thrust,
-        bool fire);
 
     bool IsConnected() const;
 
