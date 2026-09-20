@@ -14,6 +14,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "GameWindow.h"
+#include "NetworkSession.h"
 
 #include "Logger.h"
 #include "Screen.h"
@@ -304,8 +305,6 @@ void GameWindow::Step()
 	SDL_GL_SwapWindow(mainWindow);
 	NetworkSession::Poll();
 }
-
-
 
 void GameWindow::AdjustViewport(bool noResizeEvent)
 {
