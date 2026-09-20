@@ -29,7 +29,7 @@ public:
 	static void Quit();
 
 	// Paint the next frame in the main window.
-	static void Step();
+	static void Step(NetworkSession& networkSession);
 
 	// Handle resize events of the main window.
 	static void AdjustViewport(bool noResizeEvent = false);
