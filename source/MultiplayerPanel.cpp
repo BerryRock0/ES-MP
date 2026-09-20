@@ -148,7 +148,7 @@ void MultiplayerPanel::Connect()
 
     connecting = true;
 
-    if(networkSession::Connect(address, static_cast<uint16_t>(numericPort)))
+    if(networkSession.Connect(address, static_cast<uint16_t>(numericPort)))
     {
         connecting = false;
 
