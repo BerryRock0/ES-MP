@@ -27,7 +27,7 @@ public:
     explicit NetworkSession(GameModel &game);
     ~NetworkSession();
 
-    bool Connect(const std::string &host, uint16_t port);
+    bool Connect(const std::string &address, uint16_t port);
 
     void Disconnect();
 	void Poll();
