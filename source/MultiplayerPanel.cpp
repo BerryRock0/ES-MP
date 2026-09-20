@@ -1,5 +1,11 @@
 #include "MultiplayerPanel.h"
 
+#include <cctype>
+#include <cstdint>
+#include <stdexcept>
+#include <cmath>
+#include <utility>
+
 #include "NetworkSession.h"
 #include "audio/Audio.h"
 #include "text/Clipboard.h"
@@ -21,13 +27,7 @@
 #include "TextArea.h"
 #include "UI.h"
 
-#include <cctype>
-#include <cstdint>
-#include <stdexcept>
-#include <cmath>
-#include <utility>
-
-MultiplayerPanel::MultiplayerPanel()
+MultiplayerPanel::MultiplayerPanel(NetworkSession& session) : networkSession(session)
 {}
 
 void MultiplayerPanel::Draw()
@@ -148,7 +148,7 @@ void MultiplayerPanel::Connect()
 
     connecting = true;
 
-    if(NetworkSession::Connect(address, static_cast<uint16_t>(numericPort)))
+    if(networkSession::Connect(address, static_cast<uint16_t>(numericPort)))
     {
         connecting = false;
 
