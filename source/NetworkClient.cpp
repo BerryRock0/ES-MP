@@ -19,9 +19,14 @@ void NetworkClient::Disconnect()
 void NetworkClient::Poll()
 {  
 	if(!connected)
-	return;
+		return;
 
-	HandlePacket(packetData, packetSize);
+	std::vector<uint8_t> packet;
+	
+	if (!ReceivePacket(packet))
+		return;
+
+	HandlePacket(packet.data(), packet.size());
 }
 
 void NetworkClient::SendInput(int steering, bool thrust, bool fire)
