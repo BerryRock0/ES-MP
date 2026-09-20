@@ -15,7 +15,6 @@ public:
     void HandleClick(int x, int y);
 
 private:
-	void ShowError(const std::string& message);
 	NetworkSession& networkSession;
 
     std::string address = "127.0.0.1";
