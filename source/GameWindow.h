@@ -59,9 +59,4 @@ public:
 	static void UpdateTitleBarTheme();
 	static void UpdateWindowRounding();
 	#endif
-
-	void GameWindow::Step()
-	{
-		NetworkSession::Poll();
-	}
 };
