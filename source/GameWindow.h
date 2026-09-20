@@ -60,7 +60,7 @@ public:
 	static void UpdateWindowRounding();
 	#endif
 
-	void GameWindow::Step(double deltaTime)
+	void GameWindow::Step()
 	{
 		NetworkSession::Poll();
 	}
