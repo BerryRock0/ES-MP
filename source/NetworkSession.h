@@ -1,13 +1,15 @@
 // NetworkSession.h
 #pragma once
 
-#include "NetworkSnapshot.h"
-#include "NetworkClient.h"
 
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+
+
+#include "NetworkSnapshot.h"
+#include "NetworkClient.h"
 
 class GameModel;
 
@@ -34,7 +36,7 @@ public:
     State GetState() const;
 
 private:
-    class NetworkClient *client = nullptr;
+    std::unique_ptr<NetworkClient> client;
     GameModel &game;
     State state = State::Offline;
 
