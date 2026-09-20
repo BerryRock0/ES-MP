@@ -1,8 +1,8 @@
+// NetworkClient.cpp
 #include "NetworkClient.h"
 
 #include <utility>
 
-// NetworkClient.cpp
 NetworkClient::NetworkClient(SnapshotHandler handler) : snapshotHandler(std::move(handler)){}
 
 bool NetworkClient::Connect(const std::string &host, uint16_t port)
