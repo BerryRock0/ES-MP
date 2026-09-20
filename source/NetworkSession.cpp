@@ -3,9 +3,11 @@
 #include "GameModel.h"
 #include "NetworkClient.h"
 
-NetworkSession::NetworkSession(GameModel &game)
-    : game(game)
-{
+NetworkSession::NetworkSession(GameModel &game) : game(game) {}
+
+NetworkSession::~NetworkSession()
+{    
+	Disconnect();
 }
 
 bool NetworkSession::Connect(const std::string &host, uint16_t port)
@@ -21,6 +23,7 @@ bool NetworkSession::Connect(const std::string &host, uint16_t port)
     if(!client->Connect(host, port))
     {
 		client.reset();
+		state = State::Offline;
         return false;
     }
 
@@ -30,9 +33,13 @@ bool NetworkSession::Connect(const std::string &host, uint16_t port)
 
 void NetworkSession::Disconnect()
 {
+	state = State::Disconnecting;
+
 	if(client)
 		client->Disconnect();
     client.reset();
+
+	state = State::Offline;
 }
 
 void NetworkSession::Poll()
@@ -44,25 +51,16 @@ void NetworkSession::Poll()
 bool NetworkSession::IsConnected()
 {
 	return client && client->IsConnected();
+	return state == State::Connected && client && client->IsConnected();
 }
 
 void NetworkSession::Update(double deltaTime)
 {
-    if(client)
-        client->Poll();
-
+    Poll();
     game.UpdateNetworkInterpolation(deltaTime);
 }
 
-void NetworkSession::ApplySnapshot(const NetworkSnapshot &snapshot)
-{
-    (void)snapshot;
-}
-
-void NetworkSession::SendPlayerInput(
-    uint32_t buttons,
-    float thrust,
-    float turn)
+void NetworkSession::SendPlayerInput(uint32_t buttons, float thrust, float turn)
 {
     if(state != State::Connected || !client)
         return;
@@ -70,8 +68,7 @@ void NetworkSession::SendPlayerInput(
     client->SendInput(buttons, thrust, turn);
 }
 
-void NetworkSession::HandleSnapshot(
-    const NetworkSnapshot &snapshot)
+void NetworkSession::HandleSnapshot(const NetworkSnapshot &snapshot)
 {
     game.ApplyNetworkSnapshot(snapshot);
 }
