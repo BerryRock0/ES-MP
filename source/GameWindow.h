@@ -16,6 +16,8 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include "Preferences.h"
+#include "NetworkClient.h"
+#include "NetworkSnapshot.h"
 
 #include <string>
 
@@ -52,9 +54,14 @@ public:
 	// Checks for video system errors and records those as well.
 	static void ExitWithError(const std::string &message, bool doPopUp = true);
 
-#ifdef _WIN32
+	#ifdef _WIN32
 	// Set attributes of the main window according to the current preferences.
 	static void UpdateTitleBarTheme();
 	static void UpdateWindowRounding();
-#endif
+	#endif
+
+	void GameWindow::Step(double deltaTime)
+	{
+		NetworkSession::Poll();
+	}
 };
