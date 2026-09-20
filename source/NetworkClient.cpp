@@ -22,11 +22,9 @@ void NetworkClient::Poll()
 		return;
 
 	std::vector<uint8_t> packet;
-	
-	if (!ReceivePacket(packet))
-		return;
 
-	HandlePacket(packet.data(), packet.size());
+	if (!packet.empty())
+		HandlePacket(packet.data(), packet.size());
 }
 
 void NetworkClient::SendInput(uint32_t buttons, float thrust, float turn)
