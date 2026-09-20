@@ -147,6 +147,7 @@ target_sources(EndlessSkyLib PRIVATE
 	GameEvent.h
 	GameLoadingPanel.cpp
 	GameLoadingPanel.h
+	GameModel.h
 	Gamerules.cpp
 	Gamerules.h
 	GamerulesPanel.cpp
@@ -227,6 +228,8 @@ target_sources(EndlessSkyLib PRIVATE
 	Mortgage.cpp
 	Mortgage.h
 	MouseButton.h
+	MultiplayerPanel.cpp
+	MultiplayerPanel.h
 	NPC.cpp
 	NPC.h
 	NPCAction.cpp
