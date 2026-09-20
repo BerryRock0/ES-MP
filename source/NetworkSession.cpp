@@ -6,6 +6,7 @@
 
 #include <memory>
 #include <utility>
+#include <string>
 
 NetworkSession::NetworkSession(GameModel &game) : game(game)
 {}
