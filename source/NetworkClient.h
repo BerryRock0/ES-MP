@@ -1,6 +1,10 @@
 class NetworkClient
 {
 public:
+	using SnapshotHandler =	std::function<void(const NetworkSnapshot &)>;
+
+	explicit NetworkClient(SnapshotHandler handler);
+
     bool Connect(const std::string &host, uint16_t port);
     void Disconnect();
     void Poll();
@@ -13,7 +17,5 @@ public:
     bool IsConnected() const;
 
 private:
-    // UDP/TCP socket
-    // receive buffer
-    // connection state
+	SnapshotHandler snapshotHandler;
 };
