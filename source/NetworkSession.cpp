@@ -59,7 +59,7 @@ void NetworkSession::Poll()
 		client->Poll();
 }
 
-bool NetworkSession::IsConnected()
+bool NetworkSession::IsConnected() const
 {
 	return state == State::Connected && client && client->IsConnected();
 }
