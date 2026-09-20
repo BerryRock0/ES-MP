@@ -5,7 +5,7 @@
 // NetworkClient.cpp
 NetworkClient::NetworkClient(SnapshotHandler handler) : snapshotHandler(std::move(handler)){}
 
-bool NetworkClient::Connect(const std::string &host,    uint16_t port)
+bool NetworkClient::Connect(const std::string &host, uint16_t port)
 {  
 	connected = true;
     return connected;
