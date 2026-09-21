@@ -28,6 +28,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "LoadPanel.h"
 #include "Logger.h"
 #include "MainPanel.h"
+#include "MultiplayerPanel.h"
 #include "pi.h"
 #include "PilotProfile.h"
 #include "Planet.h"
@@ -50,7 +51,8 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 using namespace std;
 
-namespace {
+namespace
+{
 	const int SCROLL_MOD = 2;
 	int scrollSpeed = 1;
 	bool showCreditsWarning = true;
@@ -58,8 +60,7 @@ namespace {
 
 
 
-MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels)
-	: player(player), gamePanels(gamePanels), mainMenuUi(GameData::Interfaces().Get("main menu"))
+MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels) : player(player), gamePanels(gamePanels), mainMenuUi(GameData::Interfaces().Get("main menu"))
 {
 	assert(GameData::IsLoaded() && "MenuPanel should only be created after all data is fully loaded");
 	SetIsFullScreen(true);
@@ -106,15 +107,11 @@ MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels)
 	Audio::Pause();
 }
 
-
-
 MenuPanel::~MenuPanel()
 {
 	Audio::Resume();
 	GameData::SetBackgroundPosition(returnPos);
 }
-
-
 
 void MenuPanel::Step()
 {
@@ -210,8 +207,12 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 	}
 	else if(key == 'p')
 		GetUI().Push(new PreferencesPanel(player));
-	else if(key == 'l' || key == 'm')
+	else if(key == 'l')
 		GetUI().Push(new LoadPanel(player, gamePanels));
+	else if(key == 'm')
+	{
+		GetUI().Push(new MultiplayerPanel(ip, port));
+	}
 	else if(key == 'n' && !player.IsLoaded())
 	{
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."
