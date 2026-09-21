@@ -22,6 +22,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "image/MaskManager.h"
 #include "MenuAnimationPanel.h"
 #include "MenuPanel.h"
+#include "NetworkServer.h"
 #include "PilotProfile.h"
 #include "PlayerInfo.h"
 #include "Point.h"
@@ -35,9 +36,9 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 
 GameLoadingPanel::GameLoadingPanel(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation,
-	UI &gamePanels, NetworkSession &session, bool &finishedLoading)
+	UI &gamePanels, NetworkSession &session, NetworkServer &server, bool &finishedLoading)
 	: player(player), queue(queue), conversation(conversation), gamePanels(gamePanels),
-		session(session), finishedLoading(finishedLoading), loadingCircle(140.f, 60)
+		session(session), server(server), finishedLoading(finishedLoading), loadingCircle(140.f, 60)
 {
 	SetIsFullScreen(true);
 }
@@ -68,7 +69,7 @@ void GameLoadingPanel::Step()
 		GetUI().Pop(this);
 		if(conversation.IsEmpty())
 		{
-			GetUI().Push(new MenuPanel(player, gamePanels, session));
+			GetUI().Push(new MenuPanel(player, gamePanels, session, server));
 			GetUI().Push(new MenuAnimationPanel());
 		}
 		else

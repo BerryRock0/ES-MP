@@ -290,6 +290,24 @@ endif()
 # Link with the library dependencies.
 target_link_libraries(EndlessSky PRIVATE ExternalLibraries EndlessSkyLib $<TARGET_NAME_IF_EXISTS:SDL2::SDL2main>)
 
+# Create the dedicated (headless) LAN server target. This is a small,
+# dependency-free executable that hosts a LAN world without running the game
+# client. It shares the wire protocol and world simulation with the in-process
+# server used by the "Start LAN World" menu option.
+add_executable(EndlessSkyServer
+	source/server_main.cpp
+	source/NetworkServer.cpp
+	source/NetworkServer.h
+	source/NetworkProtocol.h
+	source/NetworkSnapshot.cpp
+	source/NetworkSnapshot.h)
+set_target_properties(EndlessSkyServer PROPERTIES OUTPUT_NAME "endless-sky-server")
+if(NOT MSVC)
+	target_compile_options(EndlessSkyServer PRIVATE "-Wall" "-Wextra")
+endif()
+find_package(Threads REQUIRED)
+target_link_libraries(EndlessSkyServer PRIVATE Threads::Threads)
+
 # Copy the MinGW runtime DLLs if necessary.
 if(MINGW AND WIN32)
 	foreach(FILE_PATH ${MINGW_RUNTIME})

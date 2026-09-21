@@ -28,7 +28,9 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "LoadPanel.h"
 #include "Logger.h"
 #include "MainPanel.h"
+#include "HostPanel.h"
 #include "MultiplayerPanel.h"
+#include "NetworkServer.h"
 #include "NetworkSession.h"
 #include "pi.h"
 #include "PilotProfile.h"
@@ -61,8 +63,8 @@ namespace
 
 
 
-MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session)
-	: player(player), gamePanels(gamePanels), session(session),
+MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session, NetworkServer &server)
+	: player(player), gamePanels(gamePanels), session(session), server(server),
 	mainMenuUi(GameData::Interfaces().Get("main menu"))
 {
 	assert(GameData::IsLoaded() && "MenuPanel should only be created after all data is fully loaded");
@@ -214,6 +216,8 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		GetUI().Push(new LoadPanel(player, gamePanels, session));
 	else if(key == 'c')
 		GetUI().Push(new MultiplayerPanel(session));
+	else if(key == 'h')
+		GetUI().Push(new HostPanel(server, session));
 	else if(key == 'n' && !player.IsLoaded())
 	{
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."

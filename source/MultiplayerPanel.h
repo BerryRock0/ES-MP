@@ -61,19 +61,24 @@ private:
 
 	std::string address;
 	std::string port;
+	std::string nickname;
+	std::string password;
 
-	bool addressFocused = true;
-	bool portFocused = false;
+	// Which input field currently has keyboard focus.
+	enum class Field { Address, Port, Nickname, Password };
+	Field focusedField = Field::Address;
 	bool connecting = false;
 
 	Rectangle addressRect;
 	Rectangle portRect;
+	Rectangle nicknameRect;
+	Rectangle passwordRect;
 
 	void Connect();
 	void ShowError(const std::string &message);
 	// The field that currently has keyboard focus, or nullptr.
 	std::string *FocusedField();
-	// Recompute the on-screen rectangles of the address and port fields.
+	// Recompute the on-screen rectangles of the input fields.
 	void LayoutInputFields();
 
 

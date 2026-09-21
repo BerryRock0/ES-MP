@@ -21,6 +21,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include <vector>
 
 class Interface;
+class NetworkServer;
 class NetworkSession;
 class PlayerInfo;
 class UI;
@@ -32,7 +33,7 @@ class UI;
 // credits and basic information on the currently loaded player.
 class MenuPanel : public Panel {
 public:
-	MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session);
+	MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session, NetworkServer &server);
 	virtual ~MenuPanel();
 
 	virtual void Step() override;
@@ -55,6 +56,9 @@ private:
 	// The multiplayer network session, shared with the rest of the game. Used
 	// by the "Connect to Server" button to open the multiplayer connect panel.
 	NetworkSession &session;
+	// The in-process LAN server, owned by main(). Used by the "Start LAN World"
+	// button to open the host panel.
+	NetworkServer &server;
 
 	const Interface *mainMenuUi;
 

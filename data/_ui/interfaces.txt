@@ -348,6 +348,9 @@ interface "main menu"
 	button c "_Connect to Server"
 		center 300 195
 		dimensions 120 30
+	button h "_Start LAN World"
+		center 300 235
+		dimensions 120 30
 	
 	# Left panel (credits):
 	button q "_Quit"
