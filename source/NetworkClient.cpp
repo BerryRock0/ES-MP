@@ -9,50 +9,53 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 namespace
 {
-// Every message on the wire is prefixed with a 4-byte, little-endian length.
-constexpr size_t LENGTH_PREFIX_SIZE = sizeof(uint32_t);
-// Reject absurdly large frames so a malicious peer cannot exhaust memory.
-constexpr uint32_t MAX_MESSAGE_SIZE = 1u << 20; // 1 MiB
+	// Every message on the wire is prefixed with a 4-byte, little-endian length.
+	constexpr size_t LENGTH_PREFIX_SIZE = sizeof(uint32_t);
 
-void WriteUint32LE(std::vector<uint8_t> &output, uint32_t value)
-{
-	output.push_back(static_cast<uint8_t>(value & 0xFF));
-	output.push_back(static_cast<uint8_t>((value >> 8) & 0xFF));
-	output.push_back(static_cast<uint8_t>((value >> 16) & 0xFF));
-	output.push_back(static_cast<uint8_t>((value >> 24) & 0xFF));
+	// Set a socket to non-blocking mode. Returns false on failure.
+	bool SetNonBlocking(int fd)
+	{
+		const int flags = fcntl(fd, F_GETFL, 0);
+		if(flags < 0)
+			return false;
+		return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+	}
 }
 
-uint32_t ReadUint32LE(const uint8_t *data)
-{
-	return static_cast<uint32_t>(data[0])
-		| (static_cast<uint32_t>(data[1]) << 8)
-		| (static_cast<uint32_t>(data[2]) << 16)
-		| (static_cast<uint32_t>(data[3]) << 24);
-}
-
-// Set a socket to non-blocking mode. Returns false on failure.
-bool SetNonBlocking(int fd)
-{
-	const int flags = fcntl(fd, F_GETFL, 0);
-	if(flags < 0)
-		return false;
-	return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
-}
-}
-
-NetworkClient::NetworkClient(SnapshotHandler handler) : snapshotHandler(std::move(handler))
+NetworkClient::NetworkClient()
 {
 }
 
 NetworkClient::~NetworkClient()
 {
 	Disconnect();
+}
+
+void NetworkClient::SetSnapshotHandler(SnapshotHandler handler)
+{
+	snapshotHandler = std::move(handler);
+}
+
+void NetworkClient::SetLoginHandler(LoginHandler handler)
+{
+	loginHandler = std::move(handler);
+}
+
+void NetworkClient::SetChatHandler(ChatHandler handler)
+{
+	chatHandler = std::move(handler);
+}
+
+void NetworkClient::SetDisconnectHandler(DisconnectHandler handler)
+{
+	disconnectHandler = std::move(handler);
 }
 
 bool NetworkClient::Connect(const std::string &host, uint16_t port)
@@ -121,11 +124,26 @@ bool NetworkClient::Connect(const std::string &host, uint16_t port)
 	if(fd < 0)
 		return false;
 
+	// Disable Nagle's algorithm so input packets are sent immediately.
+	const int one = 1;
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+
 	socketFd = fd;
 	connected = true;
+	loggedIn = false;
+	playerId = 0;
 	receiveBuffer.clear();
 	sendBuffer.clear();
 	return true;
+}
+
+void NetworkClient::Login(const std::string &nickname, const std::string &password)
+{
+	if(!connected || socketFd < 0)
+		return;
+
+	SendMessage(NetworkProtocol::MessageType::LoginRequest,
+		NetworkProtocol::BuildLoginRequest(nickname, password));
 }
 
 void NetworkClient::Disconnect()
@@ -139,8 +157,17 @@ void NetworkClient::Disconnect()
 	}
 
 	connected = false;
+	loggedIn = false;
+	playerId = 0;
 	receiveBuffer.clear();
 	sendBuffer.clear();
+}
+
+void NetworkClient::Fail(const std::string &reason)
+{
+	Disconnect();
+	if(disconnectHandler)
+		disconnectHandler(reason);
 }
 
 void NetworkClient::Poll()
@@ -164,7 +191,7 @@ void NetworkClient::Poll()
 		if(received == 0)
 		{
 			// The peer closed the connection.
-			Disconnect();
+			Fail("The server closed the connection.");
 			return;
 		}
 
@@ -176,7 +203,7 @@ void NetworkClient::Poll()
 			continue;
 
 		// Any other error means the connection is broken.
-		Disconnect();
+		Fail("The connection was lost.");
 		return;
 	}
 
@@ -186,19 +213,27 @@ void NetworkClient::Poll()
 		if(receiveBuffer.size() < LENGTH_PREFIX_SIZE)
 			break;
 
-		const uint32_t messageLength = ReadUint32LE(receiveBuffer.data());
-		if(messageLength > MAX_MESSAGE_SIZE)
+		const uint32_t messageLength = NetworkProtocol::ReadUint32(receiveBuffer.data());
+		if(messageLength < 1 || messageLength > NetworkProtocol::MAX_MESSAGE_SIZE)
 		{
 			// Malformed stream; drop the connection rather than trust it.
-			Disconnect();
+			Fail("Received a malformed message.");
 			return;
 		}
 
 		if(receiveBuffer.size() < LENGTH_PREFIX_SIZE + messageLength)
 			break; // Wait for the rest of the message.
 
-		const uint8_t *payload = receiveBuffer.data() + LENGTH_PREFIX_SIZE;
-		HandlePacket(payload, messageLength);
+		const uint8_t *frame = receiveBuffer.data() + LENGTH_PREFIX_SIZE;
+		const auto type = static_cast<NetworkProtocol::MessageType>(frame[0]);
+		const uint8_t *payload = frame + 1;
+		const size_t payloadSize = messageLength - 1;
+
+		HandlePacket(type, payload, payloadSize);
+
+		// HandlePacket may have disconnected us (e.g. on a server shutdown).
+		if(!connected)
+			return;
 
 		receiveBuffer.erase(
 			receiveBuffer.begin(),
@@ -211,28 +246,35 @@ void NetworkClient::SendInput(uint32_t buttons, float thrust, float turn)
 	if(!connected || socketFd < 0)
 		return;
 
-	// Input message layout: [buttons: u32][thrust: f32][turn: f32].
-	std::vector<uint8_t> payload;
-	payload.reserve(sizeof(uint32_t) + sizeof(float) * 2);
+	NetworkProtocol::InputState input;
+	input.buttons = buttons;
+	input.thrust = thrust;
+	input.turn = turn;
 
-	const auto *buttonBytes = reinterpret_cast<const uint8_t *>(&buttons);
-	payload.insert(payload.end(), buttonBytes, buttonBytes + sizeof(buttons));
-
-	const auto *thrustBytes = reinterpret_cast<const uint8_t *>(&thrust);
-	payload.insert(payload.end(), thrustBytes, thrustBytes + sizeof(thrust));
-
-	const auto *turnBytes = reinterpret_cast<const uint8_t *>(&turn);
-	payload.insert(payload.end(), turnBytes, turnBytes + sizeof(turn));
-
-	SendMessage(payload);
+	SendMessage(NetworkProtocol::MessageType::PlayerInput,
+		NetworkProtocol::BuildInputState(input));
 }
 
-void NetworkClient::SendMessage(const std::vector<uint8_t> &payload)
+void NetworkClient::SendChat(const std::string &text)
 {
-	if(payload.size() > MAX_MESSAGE_SIZE)
+	if(!connected || socketFd < 0)
 		return;
 
-	WriteUint32LE(sendBuffer, static_cast<uint32_t>(payload.size()));
+	NetworkProtocol::ChatMessage message;
+	NetworkProtocol::WriteFixedString(message.text, sizeof(message.text), text);
+
+	SendMessage(NetworkProtocol::MessageType::ChatSend,
+		NetworkProtocol::BuildChatMessage(message));
+}
+
+void NetworkClient::SendMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload)
+{
+	const uint32_t messageLength = static_cast<uint32_t>(1 + payload.size());
+	if(messageLength > NetworkProtocol::MAX_MESSAGE_SIZE)
+		return;
+
+	NetworkProtocol::WriteUint32(sendBuffer, messageLength);
+	sendBuffer.push_back(static_cast<uint8_t>(type));
 	sendBuffer.insert(sendBuffer.end(), payload.begin(), payload.end());
 
 	FlushSend();
@@ -259,7 +301,7 @@ void NetworkClient::FlushSend()
 			continue;
 
 		// The connection is broken.
-		Disconnect();
+		Fail("The connection was lost while sending.");
 		return;
 	}
 }
@@ -269,13 +311,66 @@ bool NetworkClient::IsConnected() const
 	return connected;
 }
 
-void NetworkClient::HandlePacket(const uint8_t *data, size_t size)
+bool NetworkClient::IsLoggedIn() const
 {
-	NetworkSnapshot snapshot;
+	return loggedIn;
+}
 
-	if(!NetworkSnapshot::Deserialize(data, size, snapshot))
-		return;
+uint32_t NetworkClient::PlayerId() const
+{
+	return playerId;
+}
 
-	if(snapshotHandler)
-		snapshotHandler(snapshot);
+void NetworkClient::HandlePacket(NetworkProtocol::MessageType type, const uint8_t *payload, size_t size)
+{
+	switch(type)
+	{
+		case NetworkProtocol::MessageType::LoginAccepted:
+		{
+			NetworkProtocol::LoginResponse response;
+			if(NetworkProtocol::ParseLoginResponse(payload, size, response))
+			{
+				loggedIn = true;
+				playerId = response.playerId;
+				if(loginHandler)
+					loginHandler(true, "", playerId);
+			}
+			break;
+		}
+		case NetworkProtocol::MessageType::LoginRejected:
+		{
+			NetworkProtocol::LoginResponse response;
+			std::string reason = "Login rejected.";
+			if(NetworkProtocol::ParseLoginResponse(payload, size, response))
+				reason = NetworkProtocol::ReadFixedString(response.reason, sizeof(response.reason));
+
+			loggedIn = false;
+			if(loginHandler)
+				loginHandler(false, reason, 0);
+			// The server closes the connection after a rejection.
+			Fail(reason);
+			break;
+		}
+		case NetworkProtocol::MessageType::Snapshot:
+		{
+			NetworkSnapshot snapshot;
+			if(NetworkSnapshot::Deserialize(payload, size, snapshot) && snapshotHandler)
+				snapshotHandler(snapshot);
+			break;
+		}
+		case NetworkProtocol::MessageType::ChatMessage:
+		{
+			NetworkProtocol::ChatMessage message;
+			if(NetworkProtocol::ParseChatMessage(payload, size, message) && chatHandler)
+				chatHandler(message);
+			break;
+		}
+		case NetworkProtocol::MessageType::ServerShutdown:
+		{
+			Fail("The server shut down.");
+			break;
+		}
+		default:
+			break;
+	}
 }

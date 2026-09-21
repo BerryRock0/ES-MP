@@ -235,8 +235,13 @@ target_sources(EndlessSkyLib PRIVATE
 	NPC.h
 	NPCAction.cpp
 	NPCAction.h
+	HostPanel.cpp
+	HostPanel.h
 	NetworkClient.cpp
 	NetworkClient.h
+	NetworkProtocol.h
+	NetworkServer.cpp
+	NetworkServer.h
 	NetworkSession.cpp
 	NetworkSession.h
 	NetworkSnapshot.cpp

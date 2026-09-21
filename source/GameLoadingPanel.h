@@ -20,6 +20,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "LoadingCircle.h"
 
 class Conversation;
+class NetworkServer;
 class NetworkSession;
 class PlayerInfo;
 class TaskQueue;
@@ -32,7 +33,7 @@ class UI;
 class GameLoadingPanel final : public Panel {
 public:
 	GameLoadingPanel(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation,
-		UI &gamePanels, NetworkSession &session, bool &finishedLoading);
+		UI &gamePanels, NetworkSession &session, NetworkServer &server, bool &finishedLoading);
 
 	void Step() final;
 	void Draw() final;
@@ -44,6 +45,7 @@ private:
 	const Conversation &conversation;
 	UI &gamePanels;
 	NetworkSession &session;
+	NetworkServer &server;
 	bool &finishedLoading;
 
 	double progress = 0;

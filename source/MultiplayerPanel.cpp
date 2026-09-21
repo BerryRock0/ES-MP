@@ -12,6 +12,7 @@
 
 #include <SDL_keycode.h>
 
+#include "NetworkProtocol.h"
 #include "NetworkSession.h"
 #include "audio/Audio.h"
 #include "text/Clipboard.h"
@@ -58,9 +59,9 @@ namespace
 
 	// The height of the address/port input fields, in pixels.
 	constexpr double INPUT_HEIGHT = 20;
-	// The width of the port field, in pixels.
-	constexpr double PORT_FIELD_WIDTH = 80;
-	// The gap between the address and port fields, in pixels.
+	// The width of the right-hand field (port / password), in pixels.
+	constexpr double PORT_FIELD_WIDTH = 120;
+	// The gap between the two columns of fields, in pixels.
 	constexpr double FIELD_GAP = 10;
 }
 
@@ -109,8 +110,9 @@ MultiplayerPanel::MultiplayerPanel(NetworkSession &session)
 	numButtons = 2;
 	canCancel = true;
 
-	addressFocused = true;
-	portFocused = false;
+	// Sensible defaults: focus the address field and pre-fill the default port.
+	focusedField = Field::Address;
+	port = std::to_string(NetworkProtocol::DEFAULT_PORT);
 
 	Resize();
 }
@@ -215,26 +217,32 @@ void MultiplayerPanel::Draw()
 
 	if(networkSession)
 	{
-		// Draw the address and port input fields.
+		// Draw the nickname, password, address, and port input fields.
 		LayoutInputFields();
 
-		auto drawField = [&](const Rectangle &rect, const std::string &value, bool focused)
+		auto drawField = [&](const Rectangle &rect, const std::string &value,
+			const std::string &placeholder, bool focused, bool masked)
 		{
 			FillShader::Fill(rect.Center(), rect.Dimensions(), focused ? dim : back);
 
-			const auto fieldText = DisplayText(value, {static_cast<int>(rect.Width() - 10), Truncate::FRONT});
+			const bool empty = value.empty();
+			const std::string shown = empty ? placeholder : (masked ? std::string(value.size(), '*') : value);
+			const auto fieldText = DisplayText(shown, {static_cast<int>(rect.Width() - 10), Truncate::FRONT});
 			Point stringPos(rect.Left() + 5, rect.Center().Y() - .5 * font.Height());
-			font.Draw(fieldText, stringPos, bright);
+			font.Draw(fieldText, stringPos, empty ? dim : bright);
 
 			if(focused)
 			{
-				Point barPos(stringPos.X() + font.FormattedWidth(fieldText) + 2, rect.Center().Y());
+				const double caretX = empty ? 2. : font.FormattedWidth(fieldText) + 2;
+				Point barPos(stringPos.X() + caretX, rect.Center().Y());
 				FillShader::Fill(barPos, Point(1., INPUT_HEIGHT - 4), dim);
 			}
 		};
 
-		drawField(addressRect, address, addressFocused);
-		drawField(portRect, port, portFocused);
+		drawField(nicknameRect, nickname, "Nickname", focusedField == Field::Nickname, false);
+		drawField(passwordRect, password, "Password", focusedField == Field::Password, true);
+		drawField(addressRect, address, "Server address", focusedField == Field::Address, false);
+		drawField(portRect, port, "Port", focusedField == Field::Port, false);
 	}
 	else if(AcceptsInput())
 	{
@@ -289,6 +297,10 @@ void MultiplayerPanel::Resize()
 	const int realBottomHeight = bottom->Height() - cancel->Height();
 
 	int height = 10 + textRectSize.Y() + 10 + (realBottomHeight - 10) * AcceptsInput();
+	// The multiplayer panel stacks two rows of input fields, so reserve room
+	// for the extra row.
+	if(networkSession)
+		height += INPUT_HEIGHT + FIELD_GAP;
 	// Determine how many extension panels we need.
 	if(height <= realBottomHeight + top->Height())
 		extensionCount = 0;
@@ -330,11 +342,21 @@ void MultiplayerPanel::LayoutInputFields()
 	const double addressWidth = totalWidth - PORT_FIELD_WIDTH - FIELD_GAP;
 	const double left = inputPos.X() - totalWidth * .5;
 
+	// Two rows: nickname/password on top, address/port below.
+	const double topRowY = inputPos.Y() - (INPUT_HEIGHT + FIELD_GAP);
+	const double bottomRowY = inputPos.Y();
+
+	nicknameRect = Rectangle(
+		Point(left + addressWidth * .5, topRowY),
+		Point(addressWidth, INPUT_HEIGHT));
+	passwordRect = Rectangle(
+		Point(left + addressWidth + FIELD_GAP + PORT_FIELD_WIDTH * .5, topRowY),
+		Point(PORT_FIELD_WIDTH, INPUT_HEIGHT));
 	addressRect = Rectangle(
-		Point(left + addressWidth * .5, inputPos.Y()),
+		Point(left + addressWidth * .5, bottomRowY),
 		Point(addressWidth, INPUT_HEIGHT));
 	portRect = Rectangle(
-		Point(left + addressWidth + FIELD_GAP + PORT_FIELD_WIDTH * .5, inputPos.Y()),
+		Point(left + addressWidth + FIELD_GAP + PORT_FIELD_WIDTH * .5, bottomRowY),
 		Point(PORT_FIELD_WIDTH, INPUT_HEIGHT));
 }
 
@@ -353,8 +375,14 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 		}
 		if(key == SDLK_TAB)
 		{
-			addressFocused = !addressFocused;
-			portFocused = !addressFocused;
+			// Cycle through the fields: nickname -> password -> address -> port.
+			switch(focusedField)
+			{
+				case Field::Nickname: focusedField = Field::Password; break;
+				case Field::Password: focusedField = Field::Address; break;
+				case Field::Address: focusedField = Field::Port; break;
+				case Field::Port: focusedField = Field::Nickname; break;
+			}
 			return true;
 		}
 		if(key == SDLK_RETURN || key == SDLK_KP_ENTER)
@@ -469,19 +497,27 @@ bool MultiplayerPanel::Click(int x, int y, MouseButton button, int clicks)
 
 	Point clickPos(x, y);
 
-	// Focus the address or port field if it was clicked.
+	// Focus whichever input field was clicked.
 	if(networkSession)
 	{
+		if(nicknameRect.Contains(clickPos))
+		{
+			focusedField = Field::Nickname;
+			return true;
+		}
+		if(passwordRect.Contains(clickPos))
+		{
+			focusedField = Field::Password;
+			return true;
+		}
 		if(addressRect.Contains(clickPos))
 		{
-			addressFocused = true;
-			portFocused = false;
+			focusedField = Field::Address;
 			return true;
 		}
 		if(portRect.Contains(clickPos))
 		{
-			addressFocused = false;
-			portFocused = true;
+			focusedField = Field::Port;
 			return true;
 		}
 	}
@@ -535,17 +571,31 @@ bool MultiplayerPanel::TextInput(const std::string &text)
 
 	for(unsigned char character : text)
 	{
-		if(addressFocused)
+		switch(focusedField)
 		{
-			// Accept hostname, IPv4, IPv6, and localhost characters.
-			if(std::isalnum(character) || character == '.' || character == ':' || character == '-' || character == '_')
-				field->push_back(static_cast<char>(character));
-		}
-		else
-		{
-			// The port field only accepts digits.
-			if(std::isdigit(character))
-				field->push_back(static_cast<char>(character));
+			case Field::Address:
+				// Accept hostname, IPv4, IPv6, and localhost characters.
+				if(std::isalnum(character) || character == '.' || character == ':'
+					|| character == '-' || character == '_')
+					field->push_back(static_cast<char>(character));
+				break;
+			case Field::Port:
+				// The port field only accepts digits.
+				if(std::isdigit(character))
+					field->push_back(static_cast<char>(character));
+				break;
+			case Field::Nickname:
+				// Nicknames allow letters, digits, and a few separators.
+				if((std::isalnum(character) || character == '_' || character == '-')
+					&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1)
+					field->push_back(static_cast<char>(character));
+				break;
+			case Field::Password:
+				// Passwords accept any printable character.
+				if(character >= ' ' && character <= '~'
+					&& field->size() < NetworkProtocol::MAX_PASSWORD_LENGTH - 1)
+					field->push_back(static_cast<char>(character));
+				break;
 		}
 	}
 
@@ -599,11 +649,13 @@ bool MultiplayerPanel::ValidateInput() const
 
 std::string *MultiplayerPanel::FocusedField()
 {
-	if(addressFocused)
-		return &address;
-	if(portFocused)
-		return &port;
-
+	switch(focusedField)
+	{
+		case Field::Address: return &address;
+		case Field::Port: return &port;
+		case Field::Nickname: return &nickname;
+		case Field::Password: return &password;
+	}
 	return nullptr;
 }
 
@@ -615,6 +667,12 @@ void MultiplayerPanel::Connect()
 	if(address.empty())
 	{
 		ShowError("Enter a server address.");
+		return;
+	}
+
+	if(nickname.empty())
+	{
+		ShowError("Enter a nickname.");
 		return;
 	}
 
@@ -647,7 +705,8 @@ void MultiplayerPanel::Connect()
 	}
 
 	connecting = true;
-	const bool connected = networkSession->Connect(address, static_cast<uint16_t>(parsedPort));
+	const bool connected = networkSession->Connect(address, static_cast<uint16_t>(parsedPort),
+		nickname, password);
 	connecting = false;
 
 	if(connected)

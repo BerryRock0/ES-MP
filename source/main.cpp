@@ -32,6 +32,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "GameVersion.h"
 #include "GameWindow.h"
 #include "GameModel.h"
+#include "NetworkServer.h"
 #include "NetworkSession.h"
 #include "Interface.h"
 #include "Logger.h"
@@ -310,12 +311,16 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	// server) and updated every frame while the game is running.
 	GameModel game;
 	NetworkSession networkSession(game);
+	// The in-process LAN server. It is idle until the player chooses
+	// "Start LAN World" from the main menu, at which point the host panel
+	// starts it and the local session connects to it over the loopback.
+	NetworkServer networkServer;
 
 	// Whether the game data is done loading. This is used to trigger any
 	// tests to run.
 	bool dataFinishedLoading = false;
 	menuPanels.Push(new GameLoadingPanel(player, queue, conversation, gamePanels, networkSession,
-		dataFinishedLoading));
+		networkServer, dataFinishedLoading));
 
 	bool showCursor = true;
 	int cursorTime = 0;
@@ -334,7 +339,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 
 	const bool isHeadless = (testContext.CurrentTest() && !debugMode);
 
-	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &networkSession, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
+	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &networkSession, &networkServer, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
 	{
 		const Preferences::FastForwardCapsLockSync fastforwardCapsLockSync = Preferences::GetFastForwardCapsLockSync();
 		const bool fastForwardSyncToCapsLock = fastforwardCapsLockSync == Preferences::FastForwardCapsLockSync::ALWAYS
@@ -363,7 +368,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			{
 				// User pressed the Menu key.
 				menuPanels.Push(shared_ptr<Panel>(
-					new MenuPanel(player, gamePanels, networkSession)));
+					new MenuPanel(player, gamePanels, networkSession, networkServer)));
 				UI::PlaySound(UI::UISound::NORMAL);
 			}
 			else if(event.type == SDL_QUIT)
@@ -437,6 +442,11 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			// snapshots and interpolate remote ships. This is a no-op while
 			// offline, so it is safe to call every frame.
 			networkSession.Update(1. / 60.);
+			// Service the LAN server (if we are hosting): accept new players,
+			// read their input, and broadcast a snapshot each tick. This is a
+			// no-op while not hosting, so it is safe to call every frame.
+			networkServer.Poll();
+			networkServer.Update(1. / 60.);
 
 			SDL_Keymod mod = SDL_GetModState();
 			Font::ShowUnderlines(mod & KMOD_ALT);
