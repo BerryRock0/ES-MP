@@ -31,7 +31,10 @@ MultiplayerPanel::MultiplayerPanel(NetworkSession& session) : networkSession(ses
 {}
 
 void MultiplayerPanel::Draw()
-{}
+{
+	constexpr int centerX = 640;
+	
+}
 
 void MultiplayerPanel::HandleTextInput(const std::string &text)
 {
@@ -161,6 +164,12 @@ void MultiplayerPanel::Connect()
         ShowError("Could not connect to the server.");
     }
 }
+
+bool MultiplayerPanel::AcceptsInput() const
+{
+	return true;
+}
+
 
 void MultiplayerPanel::ShowError(const std::string &message)
 {}
