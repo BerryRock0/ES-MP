@@ -106,7 +106,7 @@ MultiplayerPanel::FunctionButton::FunctionButton(T *panel, const std::string &bu
 
 
 template<class T>
-MultiplayerPanel *DialogPanel::CallFunctionOnExit(T *t, void (T::*fun)(bool), std::string message, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::CallFunctionOnExit(T *t, void (T::*fun)(bool), std::string message, Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
@@ -146,9 +146,9 @@ MultiplayerPanel *MultiplayerPanel::RequestString(T *t, void (T::*fun)(const std
 
 
 template<class T>
-DialogPanel *DialogPanel::RequestInteger(T *t, void (T::*fun)(int), std::string message, std::optional<int> initialValue, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::RequestInteger(T *t, void (T::*fun)(int), std::string message, std::optional<int> initialValue, Truncate truncate, bool allowsFastForward)
 {
-	DialogInit init;
+	MultiplayerInit init;
 	init.message = std::move(message);
 	if(initialValue.has_value())
 		init.initialValue = std::to_string(initialValue.value());
@@ -178,7 +178,7 @@ MultiplayerPanel *MultiplayerPanel::RequestDouble(T *t, void (T::*fun)(double), 
 template<class T>
 MultiplayerPanel *MultiplayerPanel::RequestStringWithValidation(T *t, void (T::*fun)(const std::string &), std::function<bool(const std::string &)> validate, std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
 {
-	DialogInit init;
+	MultiplayerInit init;
 	init.message = std::move(message);
 	init.initialValue = std::move(initialValue);
 	init.stringFun = std::bind(fun, t, std::placeholders::_1);
