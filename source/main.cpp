@@ -552,7 +552,6 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 				isPerformanceDisplayReady = false;
 			}
 
-			networkSession.Poll();
 			GameWindow::Step();
 
 			// Lock the game loop to 60 FPS.
