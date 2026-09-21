@@ -216,7 +216,7 @@ void HostPanel::Resize()
 
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5f);
 	Point textPos(Width() * -.5 + 10, pos.Y() + 20);
-	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - (realBottomHeight - 10);
+	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * !hosting);
 	Rectangle textRect = Rectangle::FromCorner(textPos, textRectSize);
 	text->SetRect(textRect);
 
