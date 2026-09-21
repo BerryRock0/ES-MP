@@ -212,7 +212,7 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		GetUI().Push(new LoadPanel(player, gamePanels));
 	else if(key == 'm')
 	{
-		GetUI().Push(new MultiplayerPanel(session));
+		GetUI().Push(new MultiplayerPanel(init));
 	}
 	else if(key == 'n' && !player.IsLoaded())
 	{
