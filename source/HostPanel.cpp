@@ -424,7 +424,13 @@ void HostPanel::StartHosting()
 	// Connect the local player to our own server over the loopback interface.
 	// The host is just another client as far as the server is concerned, so
 	// the same nickname/password validation applies to them too.
-	session->Connect("127.0.0.1", static_cast<uint16_t>(parsedPort), serverName, password);
+	if(!session->Connect("127.0.0.1", static_cast<uint16_t>(parsedPort), serverName, password))
+	{
+		server->Stop();
+		ShowError("Could not connect to the local server.");
+		return;
+	}}
+	
 
 	hosting = true;
 	activeButton = 1;
@@ -470,4 +476,9 @@ void HostPanel::RefreshStatus()
 	line += "\nPort: " + std::to_string(server->Port());
 	line += "\nShare your address, the port, and the password with other players.";
 	status = line;
+}
+
+void HostPanel::ShowError(const std::string &message)
+{
+	GetUI().Push(DialogPanel::Info(message));
 }
