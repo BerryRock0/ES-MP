@@ -385,13 +385,13 @@ void HostPanel::StartHosting()
 
 	if(serverName.empty())
 	{
-		ShowError("Enter a server name.")
+		ShowError("Enter a server name.");
 		return;
 	}
 
 	if(port.empty())
 	{
-		ShowError("Enter a valid port.")
+		ShowError("Enter a valid port.");
 		return;
 	}
 
