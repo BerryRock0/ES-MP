@@ -31,7 +31,7 @@
 #include "TextArea.h"
 #include "UI.h"
 
-MultiplayerPanel::MultiplayerPanel(const MultiplayerInit &init) : Panel(), networkSession(nullptr), address(nullptr), port(nullptr), addressFocused(true), portFocused(false), connecting(false)
+MultiplayerPanel::MultiplayerPanel(const MultiplayerInit &init) : Panel(), networkSession(), address(), port(), addressFocused(true), portFocused(false), connecting(false)
 {
 	MultiplayerInit init;
 	init.message = "Connect to server";
