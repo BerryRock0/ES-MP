@@ -255,9 +255,40 @@ bool HostPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 {
 	if(!hosting)
 	{
+		std::string *field = FocusedField();
+		// SDL text input is not active for this panel, so printable characters
+		// must be read from the key events themselves rather than from TextInput().
+		auto it = KEY_MAP.find(key);
+		if(field && (it != KEY_MAP.end() || (key >= ' ' && key <= '~')))
+		{
+			int ascii = (it != KEY_MAP.end()) ? it->second : key;
+			char c = ((mod & KMOD_SHIFT) ? SHIFT[ascii] : ascii);
+			// Caps lock should shift letters, but not any other keys.
+			if((mod & KMOD_CAPS) && c >= 'a' && c <= 'z')
+				c += 'A' - 'a';
+
+			bool valid = false;
+			switch(focusedField)
+			{
+				case Field::ServerName:
+					valid = (std::isalnum(c) || c == '_' || c == '-')
+						&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
+					break;
+				case Field::Port:
+					valid = std::isdigit(c);
+					break;
+				case Field::Password:
+					valid = (c >= ' ' && c <= '~')
+						&& field->size() < NetworkProtocol::MAX_PASSWORD_LENGTH - 1;
+					break;
+			}
+			if(valid)
+				field->push_back(c);
+			return true;
+		}
+
 		if(key == SDLK_BACKSPACE || key == SDLK_DELETE)
 		{
-			std::string *field = FocusedField();
 			if(field && !field->empty())
 				field->pop_back();
 			return true;
