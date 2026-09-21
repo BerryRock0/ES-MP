@@ -4,6 +4,13 @@
 
 namespace
 {
+// The size, in bytes, of a single serialized ship record. Used to sanity-check
+// the ship count advertised by a packet before allocating memory for it.
+constexpr size_t SHIP_RECORD_SIZE =
+    sizeof(uint32_t) +      // id
+    sizeof(double) * 5 +    // x, y, velocityX, velocityY, angle
+    sizeof(int);            // hull
+
 template <typename T>
 void Write(
     std::vector<uint8_t> &output,
@@ -25,7 +32,7 @@ bool Read(
     size_t &offset,
     T &value)
 {
-    if(offset + sizeof(T) > size)
+    if(offset > size || sizeof(T) > size - offset)
         return false;
 
     std::memcpy(
@@ -90,6 +97,9 @@ bool NetworkSnapshot::Deserialize(
     size_t size,
     NetworkSnapshot &snapshot)
 {
+    if(!data)
+        return false;
+
     size_t offset = 0;
     uint32_t newTick = 0;
     uint32_t shipCount = 0;
@@ -100,8 +110,10 @@ bool NetworkSnapshot::Deserialize(
     if(!Read(data, size, offset, shipCount))
         return false;
 
-    // Prevent malformed packets from allocating excessive memory.
-    if(shipCount > 10000)
+    // Prevent malformed packets from allocating excessive memory. The count
+    // must also be consistent with the number of bytes actually remaining.
+    const size_t remaining = size - offset;
+    if(shipCount > 10000 || shipCount > remaining / SHIP_RECORD_SIZE)
         return false;
 
     NetworkSnapshot result;
