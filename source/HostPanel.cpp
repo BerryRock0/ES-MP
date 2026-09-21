@@ -5,11 +5,13 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 #include <SDL_keycode.h>
+#include "shift.h"
 
 #include "NetworkProtocol.h"
 #include "NetworkServer.h"
@@ -34,6 +36,29 @@
 
 namespace
 {
+	// Map any conceivable numeric keypad keys to their ASCII values. Most of
+	// these will presumably only exist on special programming keyboards.
+	const std::map<SDL_Keycode, char> KEY_MAP = {
+		{SDLK_KP_0, '0'},
+		{SDLK_KP_1, '1'},
+		{SDLK_KP_2, '2'},
+		{SDLK_KP_3, '3'},
+		{SDLK_KP_4, '4'},
+		{SDLK_KP_5, '5'},
+		{SDLK_KP_6, '6'},
+		{SDLK_KP_7, '7'},
+		{SDLK_KP_8, '8'},
+		{SDLK_KP_9, '9'},
+		{SDLK_KP_PERIOD, '.'},
+		{SDLK_KP_MINUS, '-'},
+		{SDLK_KP_PLUS, '+'},
+		{SDLK_KP_COLON, ':'},
+		{SDLK_KP_DIVIDE, '/'},
+		{SDLK_KP_EQUALS, '='},
+		{SDLK_KP_SPACE, ' '}
+	};
+
+
 	// The height of the input fields, in pixels.
 	constexpr double INPUT_HEIGHT = 20;
 	// The width of the right-hand field (port / password), in pixels.
