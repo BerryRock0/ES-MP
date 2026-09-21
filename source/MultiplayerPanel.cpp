@@ -29,8 +29,10 @@
 #include "TextArea.h"
 #include "UI.h"
 
-MultiplayerPanel::MultiplayerPanel(NetworkSession& session) : networkSession(session)
-{}
+MultiplayerPanel::MultiplayerPanel(const MultiplayerInit &init) : networkSession(nullptr), message(init.message), canCancel(init.canCancel), activeButton(init.activeButton), allowsFastForward(init.allowsFastForward)
+{
+	// Initialize the remaining callback and text members here.
+}
 
 MultiplayerPanel *MultiplayerPanel::Info(std::string message, Truncate truncate, bool allowsFastForward)
 {
