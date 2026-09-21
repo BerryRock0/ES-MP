@@ -52,8 +52,6 @@ MultiplayerPanel::MultiplayerPanel(const MultiplayerInit &init) : Panel(), netwo
 	Resize();
 }
 
-
-
 MultiplayerPanel *MultiplayerPanel::Info(std::string message, Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
