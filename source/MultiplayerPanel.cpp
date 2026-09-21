@@ -1,5 +1,6 @@
 #include "MultiplayerPanel.h"
 
+#include <cmath>
 #include <cctype>
 #include <cstdint>
 #include <limits>
@@ -29,10 +30,28 @@
 #include "TextArea.h"
 #include "UI.h"
 
-MultiplayerPanel::MultiplayerPanel(const MultiplayerInit &init) : networkSession(nullptr), message(init.message), canCancel(init.canCancel), activeButton(init.activeButton), allowsFastForward(init.allowsFastForward)
+MultiplayerPanel::MultiplayerPanel(NetworkSession &session) : Panel(), networkSession(&session), address("127.0.0.1"), port("4242"), addressFocused(true), portFocused(false), connecting(false), isMission(false)
 {
-	// Initialize the remaining callback and text members here.
+	MultiplayerInit init;
+	init.message = "Connect to server";
+	init.canCancel = true;
+	init.initialValue.clear();
+
+	canCancel = init.canCancel;
+	activeButton = init.activeButton;
+	allowsFastForward = init.allowsFastForward;
+	system = init.system;
+
+	okText = "Connect";
+	cancelText = "Cancel";
+
+	text = std::make_shared<TextArea>();
+	text->SetText(init.message);
+
+	Resize();
 }
+
+
 
 MultiplayerPanel *MultiplayerPanel::Info(std::string message, Truncate truncate, bool allowsFastForward)
 {
