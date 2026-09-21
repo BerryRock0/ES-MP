@@ -27,6 +27,8 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Information.h"
 #include "Interface.h"
 #include "MainPanel.h"
+#include "MultiplayerPanel.h"
+#include "NetworkSession.h"
 #include "PilotProfile.h"
 #include "Planet.h"
 #include "PlayerInfo.h"
@@ -50,9 +52,9 @@ using namespace std;
 
 
 
-StartConditionsPanel::StartConditionsPanel(PlayerInfo &player, UI &gamePanels,
+StartConditionsPanel::StartConditionsPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session,
 	const StartConditionsList &allScenarios, const Panel *parent)
-	: player(player), gamePanels(gamePanels), parent(parent), gamerules(GameData::DefaultGamerules()),
+	: player(player), gamePanels(gamePanels), session(session), parent(parent), gamerules(GameData::DefaultGamerules()),
 	bright(*GameData::Colors().Get("bright")), medium(*GameData::Colors().Get("medium")),
 	selectedBackground(*GameData::Colors().Get("faint"))
 {
@@ -152,6 +154,8 @@ bool StartConditionsPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &c
 		GetUI().Pop(this);
 	else if(key == 'g')
 		GetUI().Push(new GamerulesPanel(gamerules, false));
+	else if(key == 'c')
+		GetUI().Push(new MultiplayerPanel(session));
 	else if(!scenarios.empty() && (key == SDLK_UP || key == SDLK_DOWN || key == SDLK_PAGEUP || key == SDLK_PAGEDOWN))
 	{
 		// Move up / down an entry, or a page. If at the bottom / top, wrap around.

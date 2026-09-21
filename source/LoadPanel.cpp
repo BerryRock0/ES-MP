@@ -78,8 +78,8 @@ namespace {
 
 
 
-LoadPanel::LoadPanel(PlayerInfo &player, UI &gamePanels)
-	: player(player), gamePanels(gamePanels), selectedPilot(player.Pilot()),
+LoadPanel::LoadPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session)
+	: player(player), gamePanels(gamePanels), session(session), selectedPilot(player.Pilot()),
 	pilotBox(GameData::Interfaces().Get("load menu")->GetBox("pilots")),
 	snapshotBox(GameData::Interfaces().Get("load menu")->GetBox("snapshots")),
 	tooltip(200, Alignment::LEFT, Tooltip::Direction::DOWN_LEFT, Tooltip::Corner::TOP_LEFT,
@@ -265,7 +265,7 @@ bool LoadPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."
 		// Request that the player chooses a start scenario.
 		// StartConditionsPanel also handles the case where there's no scenarios.
-		GetUI().Push(new StartConditionsPanel(player, gamePanels, GameData::StartOptions(), this));
+		GetUI().Push(new StartConditionsPanel(player, gamePanels, session, GameData::StartOptions(), this));
 	}
 	else if(key == 'd' && selectedPilot)
 	{
