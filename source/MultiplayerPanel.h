@@ -47,7 +47,7 @@ public:
     void HandleClick(int x, int y); */
 
 private:
-/*	NetworkSession& networkSession;
+/*	NetworkSession& networkSession = nullptr;
 
     std::string address = "127.0.0.1";
     std::string port = "4242";
@@ -231,7 +231,7 @@ MultiplayerPanel *MultiplayerPanel::RequestStringWithValidation(T *t, void (T::*
 }
 
 template<class T>
-MultiplayerPanel *DialogPanel::RequestStringWithCharFilter(T *t, void (T::*fun)(const std::string &), std::function<bool(const std::string &, char)> filter, std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::RequestStringWithCharFilter(T *t, void (T::*fun)(const std::string &), std::function<bool(const std::string &, char)> filter, std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
