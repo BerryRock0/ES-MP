@@ -23,7 +23,6 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 using namespace std;
 
 
-
 ScrollArea::ScrollArea()
 {
 	SetInterruptible(true);
@@ -32,20 +31,16 @@ ScrollArea::ScrollArea()
 }
 
 
-
-ScrollArea::ScrollArea(const Rectangle &r)
-	: ScrollArea()
+ScrollArea::ScrollArea(const Rectangle &r) : ScrollArea()
 {
 	ScrollArea::SetRect(r);
 }
-
 
 
 // Stub destructor, so that unique_ptrs are destructed in the correct scope.
 ScrollArea::~ScrollArea()
 {
 }
-
 
 
 void ScrollArea::SetRect(const Rectangle &r)
@@ -59,19 +54,16 @@ void ScrollArea::SetRect(const Rectangle &r)
 }
 
 
-
 void ScrollArea::SetScrollbarOffset(int offset)
 {
 	scrollbarOffset = offset;
 }
 
 
-
 void ScrollArea::SetPointerOffset(int offset)
 {
 	pointerOffset = offset;
 }
-
 
 
 void ScrollArea::SnapToTop()
@@ -81,7 +73,6 @@ void ScrollArea::SnapToTop()
 }
 
 
-
 void ScrollArea::SnapToBottom()
 {
 	scroll.Set(scroll.MaxValue(), 0);
@@ -89,11 +80,9 @@ void ScrollArea::SnapToBottom()
 }
 
 
-
 void ScrollArea::Validate(bool trailingBreak)
 {
 }
-
 
 
 void ScrollArea::Draw()
@@ -127,11 +116,9 @@ void ScrollArea::Draw()
 }
 
 
-
 void ScrollArea::DrawText(const Point &topLeft)
 {
 }
-
 
 
 bool ScrollArea::Click(int x, int y, MouseButton button, int clicks)
@@ -152,7 +139,6 @@ bool ScrollArea::Click(int x, int y, MouseButton button, int clicks)
 }
 
 
-
 bool ScrollArea::Drag(double dx, double dy)
 {
 	if(scrollBar.SyncDrag(scroll, dx, dy))
@@ -170,7 +156,6 @@ bool ScrollArea::Drag(double dx, double dy)
 }
 
 
-
 bool ScrollArea::Release(int x, int y, MouseButton button)
 {
 	if(button != MouseButton::LEFT)
@@ -180,7 +165,6 @@ bool ScrollArea::Release(int x, int y, MouseButton button)
 	dragging = false;
 	return ret;
 }
-
 
 
 bool ScrollArea::Hover(int x, int y)
@@ -195,7 +179,6 @@ bool ScrollArea::Hover(int x, int y)
 }
 
 
-
 bool ScrollArea::Scroll(double dx, double dy)
 {
 	if(hovering)
@@ -207,7 +190,6 @@ bool ScrollArea::Scroll(double dx, double dy)
 }
 
 
-
 void ScrollArea::SyncScroll(bool animated)
 {
 	if(!buffer)
@@ -217,7 +199,6 @@ void ScrollArea::SyncScroll(bool animated)
 
 	scrollBar.SyncFrom(scroll, topRight, bottomRight, animated);
 }
-
 
 
 void ScrollArea::Invalidate()
