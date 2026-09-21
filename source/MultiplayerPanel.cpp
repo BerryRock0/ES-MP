@@ -362,6 +362,10 @@ void MultiplayerPanel::LayoutInputFields()
 
 bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+	// The multiplayer connection panel handles its own keys: text is entered
+	// into the address/port fields, tab switches fields, and enter connects.
+	if(networkSession)
+	{
 		std::string *field = FocusedField();
 		// SDL text input is not active for this panel, so printable characters
 		// must be read from the key events themselves rather than from TextInput().
@@ -398,14 +402,9 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 				flickerTime = 18;
 			return true;
 		}
-
-	// The multiplayer connection panel handles its own keys: text is entered
-	// into the address/port fields, tab switches fields, and enter connects.
-	if(networkSession)
-	{
+		
 		if(key == SDLK_BACKSPACE || key == SDLK_DELETE)
 		{
-			std::string *field = FocusedField();
 			if(field && !field->empty())
 				field->pop_back();
 			return true;
