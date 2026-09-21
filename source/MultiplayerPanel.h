@@ -8,13 +8,17 @@
 #include "text/Truncate.h"
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 
+class NetworkSession;
 class System;
 class TextArea;
-class NetworkSession;
 
+// A dialog box that displays a message to the player. It can also be used as
+// the multiplayer "connect" panel, in which case it shows an address and a
+// port field and connects to a server when the player presses "Connect".
 class MultiplayerPanel : public Panel
 {
 public:
@@ -37,32 +41,40 @@ public:
 public:
 	virtual ~MultiplayerPanel() override;
 
-
 	// An OK dialog that has no callback or cancel button. Only used for displaying information.
 	static MultiplayerPanel *Info(std::string message, Truncate truncate = Truncate::NONE, bool allowsFastForward = false);
 
-/*    MultiplayerPanel(NetworkSession& session);
+	// The multiplayer connection panel. It shows an address and port field and
+	// connects to the given session when the player presses "Connect".
+	explicit MultiplayerPanel(NetworkSession &session);
 
-    void Draw();
-    void HandleKey(int key);
-    void HandleTextInput(const std::string &text);
-    void HandleClick(int x, int y); */
+	// Draw this panel.
+	virtual void Draw() override;
+
+	// Some dialogs allow fast-forward to stay active.
+	bool AllowsFastForward() const noexcept override;
+
+	virtual void UpdateTextDisplay() override;
 
 private:
 	NetworkSession *networkSession = nullptr;
 
-    std::string address;
-    std::string port;
+	std::string address;
+	std::string port;
 
-    bool addressFocused = true;
-    bool portFocused = false;
-    bool connecting = false;
+	bool addressFocused = true;
+	bool portFocused = false;
+	bool connecting = false;
 
 	Rectangle addressRect;
 	Rectangle portRect;
 
-    void Connect();
-    void ShowError(const std::string &message);
+	void Connect();
+	void ShowError(const std::string &message);
+	// The field that currently has keyboard focus, or nullptr.
+	std::string *FocusedField();
+	// Recompute the on-screen rectangles of the address and port fields.
+	void LayoutInputFields();
 
 
 	// OK / Cancel dialog.
@@ -133,7 +145,7 @@ protected:
 	};
 
 protected:
-	explicit MultiplayerPanel(MultiplayerInit &init);
+	explicit MultiplayerPanel(MultiplayerInit init);
 
 	virtual void Resize() override;
 
@@ -157,13 +169,20 @@ private:
 protected:
 	std::shared_ptr<TextArea> text;
 	// The number of extra segments in this dialog.
-	int extensionCount;
+	int extensionCount = 0;
 
-	bool canCancel;
-	int activeButton;
-	bool isOkDisabled;
-	bool allowsFastForward;
-	bool isWide;
+	std::function<void()> voidFun;
+	std::function<void(bool)> boolFun;
+	std::function<void(const std::string &)> stringFun;
+
+	std::function<bool(const std::string &)> validateStringFun;
+	std::function<bool(const std::string &, char)> filterCharFun;
+
+	bool canCancel = true;
+	int activeButton = 1;
+	bool isOkDisabled = false;
+	bool allowsFastForward = false;
+	bool isWide = false;
 	int flickerTime = 0;
 
 	std::string input;
