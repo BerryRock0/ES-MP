@@ -478,6 +478,9 @@ interface "start conditions menu"
 	button g "_Gamerules"
 		center -435 195
 		dimensions 90 30
+	button m "_Connect to Server"
+		center -285 195
+		dimensions 90 30
 	
 	# The box that will contain the description text
 	box "start description"
