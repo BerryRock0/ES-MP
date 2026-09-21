@@ -17,6 +17,7 @@
 #include "audio/Audio.h"
 #include "Color.h"
 #include "Command.h"
+#include "DialogPanel.h"
 #include "text/DisplayText.h"
 #include "shader/FillShader.h"
 #include "text/Font.h"
@@ -384,13 +385,13 @@ void HostPanel::StartHosting()
 
 	if(serverName.empty())
 	{
-		status = "Enter a server name.";
+		ShowError("Enter a server name.")
 		return;
 	}
 
 	if(port.empty())
 	{
-		status = "Enter a valid port.";
+		ShowError("Enter a valid port.")
 		return;
 	}
 
@@ -404,19 +405,19 @@ void HostPanel::StartHosting()
 	}
 	catch(const std::exception &)
 	{
-		status = "Enter a valid port.";
+		ShowError("Enter a valid port.");
 		return;
 	}
 
 	if(parsedPort < 1 || parsedPort > std::numeric_limits<uint16_t>::max())
 	{
-		status = "Port must be between 1 and 65535.";
+		ShowError("Port must be between 1 and 65535.");
 		return;
 	}
 
 	if(!server->Start(static_cast<uint16_t>(parsedPort), password, serverName))
 	{
-		status = "Could not start the server (is the port already in use?).";
+		ShowError("Could not start the server (is the port already in use?).");
 		return;
 	}
 
