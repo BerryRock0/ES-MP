@@ -64,18 +64,18 @@ private:
 	// OK / Cancel dialog.
 	// The callback is always called with the value of what button the user clicked (ok == true, cancel == false).
 	template<class T>
-	static DialogPanel *CallFunctionOnExit(T *t, void (T::*fun)(bool),
+	static MultiplayerPanel *CallFunctionOnExit(T *t, void (T::*fun)(bool),
 		std::string message,
 		Truncate truncate = Truncate::NONE,
 		bool allowsFastForward = false);
 	// OK / Cancel dialogs.
 	// If the user selects "ok", the callback is called with no parameters.
 	template<class T>
-	static DialogPanel *CallFunctionIfOk(T *t, void (T::*fun)(),
+	static MultiplayerPanel *CallFunctionIfOk(T *t, void (T::*fun)(),
 		std::string message,
 		Truncate truncate = Truncate::NONE,
 		bool allowsFastForward = false);
-	static DialogPanel *CallFunctionIfOk(std::function<void()> okFunction,
+	static MultiplayerPanel *CallFunctionIfOk(std::function<void()> okFunction,
 		std::string message,
 		int activeButton,
 		Truncate truncate = Truncate::NONE,
