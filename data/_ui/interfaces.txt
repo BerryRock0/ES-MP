@@ -1150,10 +1150,6 @@ interface "gamerules"
 		center -210 210
 		dimensions 90 30
 
-	visible if "connect to server"
-	sprite "ui/connect cancel"
-		center -115 210
-
 interface "gamerules presets"
 	sprite "ui/settings two buttons"
 		center -337 -180
