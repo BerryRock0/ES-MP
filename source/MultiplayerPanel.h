@@ -1,3 +1,4 @@
+//MultiplayerPanel.h
 #pragma once
 
 #include "Panel.h"
@@ -47,10 +48,10 @@ public:
     void HandleClick(int x, int y); */
 
 private:
-/*	NetworkSession& networkSession = nullptr;
+	NetworkSession *networkSession = nullptr;
 
-    std::string address = "127.0.0.1";
-    std::string port = "4242";
+    std::string address;
+    std::string port;
 
     bool addressFocused = true;
     bool portFocused = false;
@@ -58,7 +59,7 @@ private:
 	bool isMission = false;
 
     void Connect();
-    void ShowError(const std::string &message); */
+    void ShowError(const std::string &message);
 
 
 	// OK / Cancel dialog.
