@@ -29,6 +29,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Logger.h"
 #include "MainPanel.h"
 #include "MultiplayerPanel.h"
+#include "NetworkSession.h"
 #include "pi.h"
 #include "PilotProfile.h"
 #include "Planet.h"
@@ -211,7 +212,7 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		GetUI().Push(new LoadPanel(player, gamePanels));
 	else if(key == 'm')
 	{
-		GetUI().Push(new MultiplayerPanel(ip, port));
+		GetUI().Push(new MultiplayerPanel(session));
 	}
 	else if(key == 'n' && !player.IsLoaded())
 	{
