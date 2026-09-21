@@ -30,9 +30,30 @@
 MultiplayerPanel::MultiplayerPanel(NetworkSession& session) : networkSession(session)
 {}
 
+MultiplayerPanel *MultiplayerPanel::Info(std::string message, Truncate truncate, bool allowsFastForward)
+{
+	MultiplayerInit init;
+	init.message = std::move(message);
+	init.canCancel = false;
+	init.truncate = truncate;
+	init.allowsFastForward = allowsFastForward;
+	return new MultiplayerPanel(init);
+}
+
+MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(std::function<void()> okFunction, std::string message, int activeButton, Truncate truncate, bool allowsFastForward)
+{
+	MultiplayerInit init;
+	init.voidFun = std::move(okFunction);
+	init.message = std::move(message);
+	init.activeButton = activeButton;
+	init.truncate = truncate;
+	init.allowsFastForward = allowsFastForward;
+	return new MultiplayerPanel(init);
+}
+
 void MultiplayerPanel::Draw()
 {
-	constexpr int centerX = 640;
+	DrawBackdrop();
 
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
