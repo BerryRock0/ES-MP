@@ -316,7 +316,7 @@ void MultiplayerPanel::Resize()
 	// Resize textRectSize to match the visual height of the dialog, which will
 	// be rounded up from the actual text height by the number of panels that
 	// were added. This helps correctly position the TextArea scroll buttons.
-	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - (realBottomHeight - 10) * AcceptsInput();
+	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * networkSession) * AcceptsInput();
 
 	Rectangle textRect = Rectangle::FromCorner(textPos, textRectSize);
 	text->SetRect(textRect);
