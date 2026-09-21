@@ -164,7 +164,7 @@ void MultiplayerPanel::Draw()
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 	const Sprite *thirdButtonSprite = SpriteSet::Get("ui/wide button");
 
 	// Get the position of the top of this dialog, and of the input.
@@ -292,7 +292,7 @@ void MultiplayerPanel::Resize()
 	top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 	// The height of the bottom sprite without the included button's height.
 	const int realBottomHeight = bottom->Height() - cancel->Height();
 
@@ -333,7 +333,7 @@ void MultiplayerPanel::LayoutInputFields()
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5);
 	Point inputPos = Point(0., -(cancel->Height() + INPUT_HEIGHT)) - pos;
