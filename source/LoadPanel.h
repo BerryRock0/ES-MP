@@ -28,6 +28,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include <optional>
 #include <string>
 
+class NetworkSession;
 class PilotProfile;
 class PlayerInfo;
 class UI;
@@ -39,7 +40,7 @@ class UI;
 // to a previous game state they must save a "snapshot" of that state.
 class LoadPanel : public Panel {
 public:
-	LoadPanel(PlayerInfo &player, UI &gamePanels);
+	LoadPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session);
 
 	virtual void Draw() override;
 
@@ -75,6 +76,9 @@ private:
 	PlayerInfo &player;
 	SavedGame loadedInfo;
 	UI &gamePanels;
+	// The multiplayer network session, passed through to the start conditions
+	// panel so it can open the multiplayer connect dialog.
+	NetworkSession &session;
 
 	std::map<std::string, std::shared_ptr<PilotProfile>> pilots;
 	std::shared_ptr<PilotProfile> selectedPilot;

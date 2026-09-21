@@ -28,6 +28,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <vector>
 
+class NetworkSession;
 class PlayerInfo;
 class StartConditions;
 class TextArea;
@@ -38,7 +39,8 @@ class UI;
 class StartConditionsPanel : public Panel {
 	using StartConditionsList = std::vector<StartConditions>;
 public:
-	StartConditionsPanel(PlayerInfo &player, UI &gamePanels, const StartConditionsList &allScenarios, const Panel *parent);
+	StartConditionsPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session,
+		const StartConditionsList &allScenarios, const Panel *parent);
 
 	virtual void Draw() override final;
 
@@ -61,6 +63,8 @@ private:
 private:
 	PlayerInfo &player;
 	UI &gamePanels;
+	// The multiplayer network session, used by the "Connect to Server" button.
+	NetworkSession &session;
 	// The panel to close when a scenario is chosen.
 	const Panel *parent;
 	// The list of starting scenarios to pick from.

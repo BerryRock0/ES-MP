@@ -32,6 +32,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "GameVersion.h"
 #include "GameWindow.h"
 #include "GameModel.h"
+#include "NetworkSession.h"
 #include "Interface.h"
 #include "Logger.h"
 #include "MainPanel.h"
@@ -304,13 +305,17 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	// game loading and game saving.
 	UI menuPanels;
 
+	// The game model and the multiplayer network session. The session is owned
+	// here so that it can be shared with the menu panels (for connecting to a
+	// server) and updated every frame while the game is running.
+	GameModel game;
+	NetworkSession networkSession(game);
+
 	// Whether the game data is done loading. This is used to trigger any
 	// tests to run.
 	bool dataFinishedLoading = false;
-	menuPanels.Push(new GameLoadingPanel(player, queue, conversation, gamePanels, dataFinishedLoading));
-
-	GameModel game;
-	NetworkSession networkSession(game);
+	menuPanels.Push(new GameLoadingPanel(player, queue, conversation, gamePanels, networkSession,
+		dataFinishedLoading));
 
 	bool showCursor = true;
 	int cursorTime = 0;
@@ -329,7 +334,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 
 	const bool isHeadless = (testContext.CurrentTest() && !debugMode);
 
-	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
+	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &networkSession, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
 	{
 		const Preferences::FastForwardCapsLockSync fastforwardCapsLockSync = Preferences::GetFastForwardCapsLockSync();
 		const bool fastForwardSyncToCapsLock = fastforwardCapsLockSync == Preferences::FastForwardCapsLockSync::ALWAYS
@@ -358,7 +363,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			{
 				// User pressed the Menu key.
 				menuPanels.Push(shared_ptr<Panel>(
-					new MenuPanel(player, gamePanels)));
+					new MenuPanel(player, gamePanels, networkSession)));
 				UI::PlaySound(UI::UISound::NORMAL);
 			}
 			else if(event.type == SDL_QUIT)
@@ -427,6 +432,11 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			chrono::steady_clock::time_point start = chrono::steady_clock::now();
 
 			ProcessEvents();
+
+			// Service the multiplayer network session: receive any pending
+			// snapshots and interpolate remote ships. This is a no-op while
+			// offline, so it is safe to call every frame.
+			networkSession.Update(1. / 60.);
 
 			SDL_Keymod mod = SDL_GetModState();
 			Font::ShowUnderlines(mod & KMOD_ALT);

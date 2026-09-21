@@ -61,7 +61,9 @@ namespace
 
 
 
-MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels) : player(player), gamePanels(gamePanels), mainMenuUi(GameData::Interfaces().Get("main menu"))
+MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session)
+	: player(player), gamePanels(gamePanels), session(session),
+	mainMenuUi(GameData::Interfaces().Get("main menu"))
 {
 	assert(GameData::IsLoaded() && "MenuPanel should only be created after all data is fully loaded");
 	SetIsFullScreen(true);
@@ -208,16 +210,16 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 	}
 	else if(key == 'p')
 		GetUI().Push(new PreferencesPanel(player));
-	else if(key == 'l')
-		GetUI().Push(new LoadPanel(player, gamePanels));
-	else if(key == 'm')
+	else if(key == 'l' || key == 'm')
+		GetUI().Push(new LoadPanel(player, gamePanels, session));
+	else if(key == 'c')
 		GetUI().Push(new MultiplayerPanel(session));
 	else if(key == 'n' && !player.IsLoaded())
 	{
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."
 		// Request that the player chooses a start scenario.
 		// StartConditionsPanel also handles the case where there's no scenarios.
-		GetUI().Push(new StartConditionsPanel(player, gamePanels, GameData::StartOptions(), nullptr));
+		GetUI().Push(new StartConditionsPanel(player, gamePanels, session, GameData::StartOptions(), nullptr));
 	}
 	else if(key == 'g' && player.Pilot() && !player.Pilot()->GetGamerules().LockGamerules())
 	{

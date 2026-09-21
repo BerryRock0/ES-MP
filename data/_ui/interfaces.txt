@@ -345,6 +345,9 @@ interface "main menu"
 	button m "_Manage Pilots..."
 		center 300 155
 		dimensions 120 30
+	button c "_Connect to Server"
+		center 300 195
+		dimensions 120 30
 	
 	# Left panel (credits):
 	button q "_Quit"
@@ -478,7 +481,7 @@ interface "start conditions menu"
 	button g "_Gamerules"
 		center -435 195
 		dimensions 90 30
-	button m "_Connect to Server"
+	button c "_Connect to Server"
 		center -285 195
 		dimensions 90 30
 	

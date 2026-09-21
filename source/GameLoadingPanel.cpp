@@ -35,9 +35,9 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 
 GameLoadingPanel::GameLoadingPanel(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation,
-	UI &gamePanels, bool &finishedLoading)
+	UI &gamePanels, NetworkSession &session, bool &finishedLoading)
 	: player(player), queue(queue), conversation(conversation), gamePanels(gamePanels),
-		finishedLoading(finishedLoading), loadingCircle(140.f, 60)
+		session(session), finishedLoading(finishedLoading), loadingCircle(140.f, 60)
 {
 	SetIsFullScreen(true);
 }
@@ -68,7 +68,7 @@ void GameLoadingPanel::Step()
 		GetUI().Pop(this);
 		if(conversation.IsEmpty())
 		{
-			GetUI().Push(new MenuPanel(player, gamePanels));
+			GetUI().Push(new MenuPanel(player, gamePanels, session));
 			GetUI().Push(new MenuAnimationPanel());
 		}
 		else
