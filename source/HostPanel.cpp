@@ -429,11 +429,11 @@ void HostPanel::StartHosting()
 		server->Stop();
 		ShowError("Could not connect to the local server.");
 		return;
-	}}
+	}
 	
-
 	hosting = true;
 	activeButton = 1;
+	status.clear();
 	text->SetText("Hosting LAN world");
 	RefreshStatus();
 	Resize();
