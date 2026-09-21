@@ -126,6 +126,124 @@ void MultiplayerPanel::Draw()
 	}
 }
 
+void MultiplayerPanel::Resize()
+{
+	isWide = false;
+	Point textRectSize(Width() - 20, 0);
+	text->SetRect(Rectangle(Point(), textRectSize));
+	const Sprite *top = SpriteSet::Get("ui/dialog top");
+	// If the dialog is too tall, then switch to wide mode.
+	int maxHeight = Screen::Height() * 3 / 4;
+	if(text->GetTextHeight(false) > maxHeight)
+	{
+		textRectSize.Y() = maxHeight;
+		isWide = true;
+		// Re-wrap with the new width
+		textRectSize.X() = Width() - 20;
+		text->SetRect(Rectangle(Point{}, textRectSize));
+
+		if(text->GetLongestLineWidth() <= top->Width() - 40 - 20)
+		{
+			// Formatted text is long and skinny (e.g. scan result dialog). Go back
+			// to using the default width, since the wide width doesn't help.
+			isWide = false;
+			textRectSize.X() = Width() - 20;
+			text->SetRect(Rectangle(Point{}, textRectSize));
+		}
+	}
+	else
+		textRectSize.Y() = text->GetTextHeight(false);
+
+	top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
+	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
+	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
+	// The height of the bottom sprite without the included button's height.
+	const int realBottomHeight = bottom->Height() - cancel->Height();
+
+	int height = 10 + textRectSize.Y() + 10 + (realBottomHeight - 10) * AcceptsInput();
+	// Determine how many extension panels we need.
+	if(height <= realBottomHeight + top->Height())
+		extensionCount = 0;
+	else
+		extensionCount = (height - middle->Height()) / middle->Height();
+
+	// Now that we know how big we want to render the text, position the text
+	// area and add it to the UI.
+
+	// Get the position of the top of this dialog, and of the text and input.
+	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5f);
+	Point textPos(Width() * -.5 + 10, pos.Y() + 20);
+	// Resize textRectSize to match the visual height of the dialog, which will
+	// be rounded up from the actual text height by the number of panels that
+	// were added. This helps correctly position the TextArea scroll buttons.
+	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - (realBottomHeight - 10) * AcceptsInput();
+
+	Rectangle textRect = Rectangle::FromCorner(textPos, textRectSize);
+	text->SetRect(textRect);
+}
+
+bool MultiplayerPanel::Click(int x, int y, MouseButton button, int clicks)
+{
+	if(button != MouseButton::LEFT)
+		return false;
+	Point clickPos(x, y);
+
+	const Sprite *sprite = SpriteSet::Get("ui/dialog cancel");
+	double toleranceX = (sprite->Width() - 20) / 2.;
+	double toleranceY = (sprite->Height() - 20) / 2.;
+
+	Point ok = clickPos - okPos;
+	if(fabs(ok.X()) < toleranceX && fabs(ok.Y()) < toleranceY)
+	{
+		activeButton = 1;
+		return DoKey(SDLK_RETURN);
+	}
+
+	if(canCancel)
+	{
+		Point cancel = clickPos - cancelPos;
+		if(fabs(cancel.X()) < toleranceX && fabs(cancel.Y()) < toleranceY)
+		{
+			activeButton = 2;
+			return DoKey(SDLK_RETURN);
+		}
+	}
+
+	if(numButtons == 3)
+	{
+		Point cancel = clickPos - thirdPos;
+		const Sprite *sprite3 = SpriteSet::Get("ui/wide button");
+		toleranceX = (sprite3->Width() - 20) / 2.;
+		toleranceY = (sprite3->Height() - 20) / 2.;
+		if(fabs(cancel.X()) < toleranceX && fabs(cancel.Y()) < toleranceY)
+		{
+			activeButton = 3;
+			return DoKey(SDLK_RETURN);
+		}
+	}
+
+	return true;
+}
+
+void MultiplayerPanel::DoCallback(const bool isOk) const
+{
+	if(stringFun)
+		stringFun(input);
+
+	if(voidFun)
+		voidFun();
+
+	if(boolFun)
+		boolFun(isOk);
+}
+
+int MultiplayerPanel::Width() const
+{
+	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
+	return top->Width() - 20;
+}
+
 bool MultiplayerPanel::AllowsFastForward() const noexcept
 {
 	return allowsFastForward;
@@ -135,34 +253,6 @@ void MultiplayerPanel::UpdateTextDisplay()
 {
 	text->SetAlignment(Preferences::GetTextAlignment());
 	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
-}
-
-MultiplayerPanel::MultiplayerPanel(MultiplayerInit &init) : voidFun(std::move(init.voidFun)), boolFun(std::move(init.boolFun)), stringFun(std::move(init.stringFun)), validateStringFun(std::move(init.validateStringFun)), filterCharFun(std::move(init.filterCharFun)), canCancel(init.canCancel), activeButton(init.activeButton), allowsFastForward(init.allowsFastForward), input(std::move(init.initialValue)), buttonOne(init.buttonOne), buttonThree(init.buttonThree), system(init.system)
-{
-	Audio::Pause();
-	SetInterruptible(isMission);
-
-	isWide = false;
-	numButtons = canCancel ? (!buttonThree.buttonLabel.empty() ? 3 : 2) : 1;
-
-	if(buttonOne.buttonLabel.empty())
-		okText = isMission ? "Accept" : "OK";
-	else
-	{
-		okText = buttonOne.buttonLabel;
-		stringFun = buttonOne.buttonAction;
-	}
-	cancelText = isMission ? "Decline" : "Cancel";
-
-	text = make_shared<TextArea>();
-	text->SetAlignment(Preferences::GetTextAlignment());
-	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
-	text->SetTruncate(init.truncate);
-	text->SetText(init.message);
-	extensionCount = 0;
-	AddChild(text);
-
-	isOkDisabled = !ValidateInput();
 }
 
 void MultiplayerPanel::HandleTextInput(const std::string &text)
@@ -296,7 +386,7 @@ void MultiplayerPanel::Connect()
 
 bool MultiplayerPanel::AcceptsInput() const
 {
-	return !isMission;
+	return true;
 }
 
 void MultiplayerPanel::ShowError(const std::string &message)
