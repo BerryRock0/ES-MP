@@ -120,7 +120,6 @@ protected:
 
 		bool canCancel = true;
 		int activeButton = 1;
-		bool isMission = false;
 		bool allowsFastForward = false;
 
 		MultiplayerPanel::FunctionButton buttonOne;
@@ -157,7 +156,6 @@ protected:
 
 	bool canCancel;
 	int activeButton;
-	bool isMission;
 	bool isOkDisabled;
 	bool allowsFastForward;
 	bool isWide;
