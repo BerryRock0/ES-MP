@@ -1132,7 +1132,7 @@ interface "gamerules"
 		from -400 60 to -275 130
 		alignment right
 		color medium
-	
+
 	visible if "multiple settings pages"
 	sprite "ui/dialog cancel"
 		center -115 210
@@ -1147,6 +1147,9 @@ interface "gamerules"
 		center -210 210
 		dimensions 90 30
 
+	visible if "connect to server"
+	sprite "ui/connect cancel"
+		center -115 210
 
 interface "gamerules presets"
 	sprite "ui/settings two buttons"
