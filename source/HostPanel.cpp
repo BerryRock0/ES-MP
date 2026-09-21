@@ -448,7 +448,6 @@ void HostPanel::StopHosting()
 
 	hosting = false;
 	activeButton = 1;
-	status = clear();
 	status.clear();
 	text->SetText("Start LAN World");
 	Resize();
