@@ -210,6 +210,8 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		GetUI().Push(new PreferencesPanel(player));
 	else if(key == 'l')
 		GetUI().Push(new LoadPanel(player, gamePanels));
+	else if(key == 'm')
+		GetUI().Push(new MultiplayerPanel(session));
 	else if(key == 'n' && !player.IsLoaded())
 	{
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."
