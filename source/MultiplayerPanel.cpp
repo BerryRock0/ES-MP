@@ -2,9 +2,11 @@
 
 #include <cctype>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
-#include <cmath>
 #include <utility>
+
+#include <SDL_keycode.h>
 
 #include "NetworkSession.h"
 #include "audio/Audio.h"
@@ -267,21 +269,21 @@ void MultiplayerPanel::HandleTextInput(const std::string &text)
     if(!field)
         return;
 
-    for(char character : text)
+    for(unsigned char character : text)
     {
         if(addressFocused)
         {
             // Accept hostname, IPv4, IPv6, and localhost characters.
             if(std::isalnum(static_cast<unsigned char>(character)) || character == '.' || character == ':' || character == '-' || character == '_')
             {
-                field->push_back(character);
+                field->push_back(static_cast<char>(character));
             }
         }
         else
         {
             if(std::isdigit(static_cast<unsigned char>(character)))
             {
-                field->push_back(character);
+                field->push_back(static_cast<char>(character));
             }
         }
     }
@@ -290,104 +292,159 @@ void MultiplayerPanel::HandleTextInput(const std::string &text)
 void MultiplayerPanel::HandleKey(int key)
 {
     // Replace these key values with the project's key constants.
-
-    if(key == /* Backspace */ 8)
-    {
-        std::string *field = nullptr;
-
-        if(addressFocused)
-            field = &address;
-        else if(portFocused)
-            field = &port;
-
-        if(field && !field->empty())
-            field->pop_back();
-    }
-
-    if(key == /* Tab */ 9)
-    {
-        if(addressFocused)
-        {
-            addressFocused = false;
-            portFocused = true;
-        }
-        else
-        {
-            addressFocused = true;
-            portFocused = false;
-        }
-    }
-
-    if(key == /* Enter */ 13)
-        Connect();
+	switch (key)
+	{
+		case SLDK_BACKSPACE:
+		{
+			std::string *field = nullptr;
+			if(addressFocused)
+				field = &address;
+			else if(portFocused)
+				field = &port;
+			if(field && !field->empty())	
+				field->pop_back();
+			break;
+		}
+		case SLDK_TAB:
+		if(addressFocused)
+		{
+			addressFocused = false;
+			portFocused = true;
+		}
+		else
+		{
+			addressFocused = true;	
+			portFocused = false;	
+		}
+		break;
+		
+		case SLDK_RETURN:
+		case SLDK_KP_ENTER:
+			Connect();
+			break;
+		default:
+			break;
+	}
 }
 
-void MultiplayerPanel::HandleClick(int x, int y)
+bool MultiplayerPanel::Click(int x, int y, MouseButton button, int clicks)
 {
-    // Replace these bounds with the actual panel coordinates.
+	if(button != MouseButton::LEFT)
+		return false;
 
-    if(y >= 220 && y <= 280)
-    {
-        addressFocused = true;
-        portFocused = false;
-    }
-    else if(y >= 290 && y <= 350)
-    {
-        addressFocused = false;
-        portFocused = true;
-    }
-    else if(y >= 390 && y <= 460)
-    {
-        Connect();
-    }
+	Point clickPos(x, y);
+
+	// Use the actual positions and dimensions of your address and port fields.
+	if(addressRect.Contains(clickPos))
+	{
+		addressFocused = true;
+		portFocused = false;
+		return true;
+	}
+
+	if(portRect.Contains(clickPos))
+	{
+		addressFocused = false;
+		portFocused = true;
+		return true;
+	}
+
+	const Sprite *sprite = SpriteSet::Get("ui/dialog cancel");
+	double toleranceX = (sprite->Width() - 20) / 2.;
+	double toleranceY = (sprite->Height() - 20) / 2.;
+
+	Point ok = clickPos - okPos;
+	if(std::fabs(ok.X()) < toleranceX && std::fabs(ok.Y()) < toleranceY)
+	{
+		activeButton = 1;
+		return DoKey(SDLK_RETURN);
+	}
+
+	if(canCancel)
+	{
+		Point cancel = clickPos - cancelPos;
+		if(std::fabs(cancel.X()) < toleranceX && std::fabs(cancel.Y()) < toleranceY)
+		{
+			activeButton = 2;
+			return DoKey(SDLK_RETURN);
+		}
+	}
+
+	if(numButtons == 3)
+	{
+		const Sprite *sprite3 = SpriteSet::Get("ui/wide button");
+		toleranceX = (sprite3->Width() - 20) / 2.;
+		toleranceY = (sprite3->Height() - 20) / 2.;
+
+		Point third = clickPos - thirdPos;
+		if(std::fabs(third.X()) < toleranceX && std::fabs(third.Y()) < toleranceY)
+		{
+			activeButton = 3;
+			return DoKey(SDLK_RETURN);
+		}
+	}
+
+	return true;
 }
 
 void MultiplayerPanel::Connect()
 {
-    if(address.empty())
-    {
-        ShowError("Enter a server address.");
-        return;
-    }
+	if(address.empty())
+	{
+		ShowError("Enter a server address.");
+		return;
+	}
 
-    int numericPort = 0;
+	if(port.empty())
+	{
+		ShowError("Enter a valid port.");
+		return;
+	}
 
-    try
-    {
-        numericPort = std::stoi(port);
-    }
-    catch(const std::exception &)
-    {
-        ShowError("Enter a valid port.");
-        return;
-    }
+	unsigned long parsedPort = 0;
 
-    if(numericPort < 1 || numericPort > 65535)
-    {
-        ShowError("Port must be between 1 and 65535.");
-        return;
-    }
+	try
+	{
+		std::size_t charactersRead = 0;
+		parsedPort = std::stoul(port, &charactersRead);
 
-    connecting = true;
+		if(charactersRead != port.size())
+			throw std::invalid_argument("port contains non-numeric characters");
+	}
+	catch(const std::exception &)
+	{
+		ShowError("Enter a valid port.");
+		return;
+	}
 
-    if(networkSession.Connect(address, static_cast<uint16_t>(numericPort)))
-    {
-        connecting = false;
+	if(parsedPort < 1 || parsedPort > std::numeric_limits<uint16_t>::max())
+	{
+		ShowError("Port must be between 1 and 65535.");
+		return;
+	}
 
-        // Replace this with the game's actual panel transition.
-        // GameWindow::SetPanel("multiplayer-game");
-    }
-    else
-    {
-        connecting = false;
-        ShowError("Could not connect to the server.");
-    }
+	connecting = true;
+
+	if(networkSession.Connect(address, static_cast<uint16_t>(parsedPort)))
+	{
+		connecting = false;
+
+		// Replace with the real transition in your project.
+		// GameWindow::SetPanel("multiplayer-game");
+	}
+	else
+	{
+		connecting = false;
+		ShowError("Could not connect to the server.");
+	}
 }
 
 bool MultiplayerPanel::AcceptsInput() const
 {
-	return true;
+	return addressFocused || portFocused;
 }
 
 void MultiplayerPanel::ShowError(const std::string &message)
-{}
+{
+	GetUI().Push(MultiplayerPanel::Info(message, Truncate::NONE, false));
+}
