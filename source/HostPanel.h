@@ -54,6 +54,8 @@ private:
 	void StopHosting();
 	// Refresh the status line shown while hosting.
 	void RefreshStatus();
+	//Show and error message to the player
+	void ShowError(const std::string &message);
 
 	NetworkServer *server = nullptr;
 	NetworkSession *session = nullptr;
