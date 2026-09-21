@@ -362,6 +362,43 @@ void MultiplayerPanel::LayoutInputFields()
 
 bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+		std::string *field = FocusedField();
+		// SDL text input is not active for this panel, so printable characters
+		// must be read from the key events themselves rather than from TextInput().
+		auto it = KEY_MAP.find(key);
+		if(field && (it != KEY_MAP.end() || (key >= ' ' && key <= '~')))
+		{
+			int ascii = (it != KEY_MAP.end()) ? it->second : key;
+			char c = ((mod & KMOD_SHIFT) ? SHIFT[ascii] : ascii);
+			// Caps lock should shift letters, but not any other keys.
+			if((mod & KMOD_CAPS) && c >= 'a' && c <= 'z')
+				c += 'A' - 'a';
+
+			bool valid = false;
+			switch(focusedField)
+			{
+				case Field::Address:
+					valid = std::isalnum(c) || c == '.' || c == ':' || c == '-' || c == '_';
+					break;
+				case Field::Port:
+					valid = std::isdigit(c);
+					break;
+				case Field::Nickname:
+					valid = (std::isalnum(c) || c == '_' || c == '-')
+						&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
+					break;
+				case Field::Password:
+					valid = (c >= ' ' && c <= '~')
+						&& field->size() < NetworkProtocol::MAX_PASSWORD_LENGTH - 1;
+					break;
+			}
+			if(valid)
+				field->push_back(c);
+			else
+				flickerTime = 18;
+			return true;
+		}
+
 	// The multiplayer connection panel handles its own keys: text is entered
 	// into the address/port fields, tab switches fields, and enter connects.
 	if(networkSession)
