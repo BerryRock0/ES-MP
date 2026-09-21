@@ -56,7 +56,9 @@ private:
     bool addressFocused = true;
     bool portFocused = false;
     bool connecting = false;
-	bool isMission = false;
+
+	Rectangle addressRect;
+	Rectangle portRect;
 
     void Connect();
     void ShowError(const std::string &message);
