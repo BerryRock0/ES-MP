@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 
+class System;
 class TextArea;
 class NetworkSession;
 
@@ -140,6 +141,7 @@ protected:
 	// button is highlighted and the enter key to select it.
 	virtual bool KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress) override;
 	virtual bool Click(int x, int y, MouseButton button, int clicks) override;
+	virtual bool TextInput(const std::string &text) override;
 
 private:
 	void DoCallback(bool isOk = true) const;
@@ -176,7 +178,7 @@ protected:
 	MultiplayerPanel::FunctionButton buttonOne;
 	MultiplayerPanel::FunctionButton buttonThree;
 
-	int numButtons;
+	int numButtons = 1;
 
 	const System *system = nullptr;
 };
