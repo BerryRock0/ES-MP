@@ -126,6 +126,45 @@ void MultiplayerPanel::Draw()
 	}
 }
 
+bool MultiplayerPanel::AllowsFastForward() const noexcept
+{
+	return allowsFastForward;
+}
+
+void MultiplayerPanel::UpdateTextDisplay()
+{
+	text->SetAlignment(Preferences::GetTextAlignment());
+	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
+}
+
+MultiplayerPanel::MultiplayerPanel(MultiplayerInit &init) : voidFun(std::move(init.voidFun)), boolFun(std::move(init.boolFun)), stringFun(std::move(init.stringFun)), validateStringFun(std::move(init.validateStringFun)), filterCharFun(std::move(init.filterCharFun)), canCancel(init.canCancel), activeButton(init.activeButton), allowsFastForward(init.allowsFastForward), input(std::move(init.initialValue)), buttonOne(init.buttonOne), buttonThree(init.buttonThree), system(init.system)
+{
+	Audio::Pause();
+	SetInterruptible(isMission);
+
+	isWide = false;
+	numButtons = canCancel ? (!buttonThree.buttonLabel.empty() ? 3 : 2) : 1;
+
+	if(buttonOne.buttonLabel.empty())
+		okText = isMission ? "Accept" : "OK";
+	else
+	{
+		okText = buttonOne.buttonLabel;
+		stringFun = buttonOne.buttonAction;
+	}
+	cancelText = isMission ? "Decline" : "Cancel";
+
+	text = make_shared<TextArea>();
+	text->SetAlignment(Preferences::GetTextAlignment());
+	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
+	text->SetTruncate(init.truncate);
+	text->SetText(init.message);
+	extensionCount = 0;
+	AddChild(text);
+
+	isOkDisabled = !ValidateInput();
+}
+
 void MultiplayerPanel::HandleTextInput(const std::string &text)
 {
     std::string *field = nullptr;
