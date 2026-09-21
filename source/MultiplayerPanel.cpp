@@ -34,40 +34,6 @@ void MultiplayerPanel::Draw()
 {
 	constexpr int centerX = 640;
 
-	// The width of the margin on the right/left sides of the dialog. This area is part of the sprite,
-	// but shouldn't have any text or other graphics rendered over it. (It's mostly transparent.)
-	constexpr double LEFT_MARGIN = 20;
-	constexpr double RIGHT_MARGIN = 20;
-	constexpr double HORIZONTAL_MARGIN = LEFT_MARGIN + RIGHT_MARGIN;
-	// The margin on the right/left sides of the button sprite. The bottom segment also includes a button
-	// that uses the same value.
-	constexpr double BUTTON_LEFT_MARGIN = 10;
-	constexpr double BUTTON_RIGHT_MARGIN = 10;
-	constexpr double BUTTON_HORIZONTAL_MARGIN = BUTTON_LEFT_MARGIN + BUTTON_RIGHT_MARGIN;
-	// The margin on the top/bottom sides of the button sprite. The bottom segment also includes a button
-	// that uses the same value.
-	constexpr double BUTTON_TOP_MARGIN = 10;
-	constexpr double BUTTON_BOTTOM_MARGIN = 10;
-	constexpr double BUTTON_VERTICAL_MARGIN = BUTTON_TOP_MARGIN + BUTTON_BOTTOM_MARGIN;
-	// The width of the padding used on the left/right sides of each segment, in pixels.
-	constexpr double LEFT_PADDING = 10;
-	constexpr double RIGHT_PADDING = 10;
-	constexpr double HORIZONTAL_PADDING = RIGHT_PADDING + LEFT_PADDING;
-	// The height of the padding used by the top/bottom segment, in pixels.
-	constexpr double TOP_PADDING = 10;
-	constexpr double BOTTOM_PADDING = 10;
-	constexpr double VERTICAL_PADDING = TOP_PADDING + BOTTOM_PADDING;
-	// The width of the padding at the beginning/end of an input field.
-	constexpr double INPUT_LEFT_PADDING = 5;
-	constexpr double INPUT_RIGHT_PADDING = 5;
-	constexpr double INPUT_HORIZONTAL_PADDING = INPUT_LEFT_PADDING + INPUT_RIGHT_PADDING;
-	// The height of the padding at the top/bottom of an input field.
-	constexpr double INPUT_TOP_PADDING = 2;
-	constexpr double INPUT_BOTTOM_PADDING = 2;
-	constexpr double INPUT_VERTICAL_PADDING = INPUT_TOP_PADDING + INPUT_BOTTOM_PADDING;
-	// The height of an input field in pixels.
-	constexpr double INPUT_HEIGHT = 20;
-
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
@@ -76,7 +42,7 @@ void MultiplayerPanel::Draw()
 
 	// Get the position of the top of this dialog, and of the input.
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5);
-	Point inputPos = Point(0., -(cancel->Height() + INPUT_HEIGHT)) - pos;
+	Point inputPos = Point(0., -(cancel->Height() + 20)) - pos;
 	
 	// Draw the top section of the dialog box.
 	pos.Y() += top->Height() * .5;
@@ -102,12 +68,12 @@ void MultiplayerPanel::Draw()
 	const Color &dim = *GameData::Colors().Get("medium");
 	const Color &back = *GameData::Colors().Get("faint");
 	const Color &inactive = *GameData::Colors().Get("inactive");
-	okPos = pos + Point((top->Width() - RIGHT_MARGIN - cancel->Width()) * .5, 0.);
+	okPos = pos + Point((top->Width() - 20 - cancel->Width()) * .5, 0.);
 	Point labelPos(okPos.X() - .5 * font.Width(okText), okPos.Y() - .5 * font.Height());
 	font.Draw(okText, labelPos, isOkDisabled ? inactive : (activeButton == 1 ? bright : dim));
 	if(canCancel)
 	{
-		cancelPos = pos + Point(okPos.X() - cancel->Width() + BUTTON_RIGHT_MARGIN, 0.);
+		cancelPos = pos + Point(okPos.X() - cancel->Width() + 10, 0.);
 		SpriteShader::Draw(cancel, cancelPos);
 		labelPos = {cancelPos.X() - .5 * font.Width(cancelText), cancelPos.Y() - .5 * font.Height()};
 		font.Draw(cancelText, labelPos, activeButton == 2 ? bright : dim);
@@ -115,7 +81,7 @@ void MultiplayerPanel::Draw()
 		if(numButtons == 3)
 		{
 			// Third button, always the left-most button:
-			thirdPos = pos + Point(cancelPos.X() - (thirdButtonSprite->Width() + cancel->Width()) / 2 + BUTTON_RIGHT_MARGIN, 0.);
+			thirdPos = pos + Point(cancelPos.X() - (thirdButtonSprite->Width() + cancel->Width()) / 2 + 10, 0.);
 			SpriteShader::Draw(thirdButtonSprite, thirdPos);
 			labelPos = {thirdPos.X() - .5 * font.Width(buttonThree.buttonLabel), thirdPos.Y() - .5 * font.Height()};
 			font.Draw(buttonThree.buttonLabel, labelPos, activeButton == 3 ? bright : dim);
@@ -125,17 +91,17 @@ void MultiplayerPanel::Draw()
 	// Draw the input, if any.
 	if(AcceptsInput())
 	{
-		FillShader::Fill(inputPos, Point(Width() - HORIZONTAL_PADDING, INPUT_HEIGHT), (flickerTime % 6 > 3) ? dim : back);
+		FillShader::Fill(inputPos, Point(Width() - 20, 20), (flickerTime % 6 > 3) ? dim : back);
 		
 		if(flickerTime)
 			--flickerTime;
 
-		Point stringPos(inputPos.X() - (Width() - HORIZONTAL_PADDING) * .5 + INPUT_LEFT_PADDING, inputPos.Y() - .5 * font.Height());
-		const auto inputText = DisplayText(input, {static_cast<int>(Width() - HORIZONTAL_PADDING - INPUT_HORIZONTAL_PADDING), Truncate::FRONT});
+		Point stringPos(inputPos.X() - (Width() - 20) * .5 + 5, inputPos.Y() - .5 * font.Height());
+		const auto inputText = DisplayText(input, {static_cast<int>(Width() - 20 - 10), Truncate::FRONT});
 		font.Draw(inputText, stringPos, bright);
 
-		Point barPos(stringPos.X() + font.FormattedWidth(inputText) + INPUT_TOP_PADDING, inputPos.Y());
-		FillShader::Fill(barPos, Point(1., INPUT_HEIGHT - INPUT_VERTICAL_PADDING), dim);
+		Point barPos(stringPos.X() + font.FormattedWidth(inputText) + 2, inputPos.Y());
+		FillShader::Fill(barPos, Point(1., 20 - 4), dim);
 	}
 }
 
