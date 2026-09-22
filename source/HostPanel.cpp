@@ -110,7 +110,7 @@ void HostPanel::Draw()
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5);
 	Point inputPos = Point(0., -(cancel->Height() + INPUT_HEIGHT)) - pos;
