@@ -77,6 +77,7 @@ private:
 	bool ShowHelp(bool force);
 	void StepEvents(bool &isActive);
 	void DrawNetworkPlayers();
+	void DrawChatButton();
 
 
 private:
@@ -90,6 +91,9 @@ private:
 	// The active network session, if the player is playing multiplayer. Lets
 	// the main panel open the in-game chat panel.
 	NetworkSession *session = nullptr;
+	// The clickable area of the "Chat" button in the bottom-right corner of
+	// the screen, updated every Draw. Only meaningful while a session is set.
+	Rectangle chatButtonRect;
 
 	// These are the pending ShipEvents that have yet to be processed.
 	std::list<ShipEvent> eventQueue;

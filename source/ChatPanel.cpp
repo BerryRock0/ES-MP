@@ -95,8 +95,11 @@ void ChatPanel::Draw()
 	// One row for the button, MAX_LINES for the chat history, and one row for
 	// the input line.
 	const double boxHeight = (MAX_LINES + 2) * lineHeight + 2. * BOX_PADDING;
+	// Screen coordinates run from -W/2..W/2 (top-left at Screen::TopLeft and
+	// bottom-right at Screen::BottomRight), so anchor the box to the bottom-
+	// right edge of the screen.
 	const Point boxCenter(Screen::Width() * .5 - BOX_MARGIN - BOX_WIDTH * .5,
-		Screen::Height() - BOX_MARGIN - boxHeight * .5);
+		Screen::Height() * .5 - BOX_MARGIN - boxHeight * .5);
 	FillShader::Fill(boxCenter, Point(BOX_WIDTH, boxHeight), back);
 
 	// The button, top-right inside the box. It only exists when there is
