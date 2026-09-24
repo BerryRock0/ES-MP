@@ -38,6 +38,8 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Logger.h"
 #include "MainPanel.h"
 #include "MenuPanel.h"
+#include "Messages.h"
+#include "MultiplayerPanel.h"
 #include "Panel.h"
 #include "PilotProfile.h"
 #include "PlayerInfo.h"
@@ -46,7 +48,9 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "PrintData.h"
 #include "Random.h"
 #include "Screen.h"
+#include "Ship.h"
 #include "image/SpriteSet.h"
+#include "System.h"
 #include "shader/SpriteShader.h"
 #include "TaskQueue.h"
 #include "test/Test.h"
@@ -310,11 +314,119 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	// here so that it can be shared with the menu panels (for connecting to a
 	// server) and updated every frame while the game is running.
 	GameModel game;
-	NetworkSession networkSession(game);
+	NetworkSession networkSession(game, player);
 	// The in-process LAN server. It is idle until the player chooses
 	// "Start LAN World" from the main menu, at which point the host panel
 	// starts it and the local session connects to it over the loopback.
 	NetworkServer networkServer;
+
+	// Surface chat lines and network errors to the in-game message log so the
+	// player can see what is happening while flying. Errors (a rejected login,
+	// a lost connection, ...) also reach the terminal via the logger. When the
+	// player is still in a menu, where the in-game message log is not visible,
+	// show the error as a dialog too: otherwise a rejected login looks exactly
+	// like being stuck in the lobby with no explanation.
+	networkSession.SetChatHandler([](const string &sender, const string &text)
+	{
+		Messages::Add({sender + ": " + text, GameData::MessageCategories().Get("info")});
+	});
+	networkSession.SetErrorHandler([&menuPanels](const string &message)
+	{
+		Logger::Log(message, Logger::Level::WARNING);
+		Messages::Add({message, GameData::MessageCategories().Get("info")});
+		if(!menuPanels.IsEmpty())
+			menuPanels.Push(MultiplayerPanel::Info(message));
+	});
+
+	// When the player connects, enter the shared world as soon as the login
+	// succeeds using an in-memory pilot built from the server's own data: its
+	// stored pilot save for this nickname, or a fresh start in the server's
+	// world. An active flight is replaced below with that pilot, so a remote
+	// or single-player pilot is never carried into a new session -- the
+	// remote save is always loaded dynamically from the network, and a
+	// previous player's save cannot linger. The only flight that survives a
+	// login is the host's own loopback flight, which the host panel creates
+	// synchronously (under the server's nickname) before this handler fires;
+	// it is recognized by the nickname comparison below. The main menu's
+	// backdrop flight is not the player's game, so a main-menu joiner
+	// replaces it below with the server's world. The login is asynchronous,
+	// so the flight only begins once the server has accepted us.
+	networkSession.SetLoggedInHandler([&player, &gamePanels, &menuPanels, &networkSession]()
+	{
+		Logger::Log("Login accepted; clearing startup and menu panels.", Logger::Level::INFO);
+		// A successful login is the transition out of every startup/menu
+		// screen. Clear the complete menu stack before attempting to create a
+		// network pilot; otherwise a failed pilot initialization would leave
+		// the New Pilot screen visible after the server accepted the login.
+		menuPanels.Reset();
+
+		// Only the host's own loopback flight may survive a login, and only
+		// when it was created under the same nickname we just logged in with.
+		// Every other active flight -- the menu backdrop, a previous remote
+		// pilot, or a single-player pilot -- is replaced below with a pilot
+		// that comes strictly from the server, so a logged-in player can
+		// never keep another player's save.
+		MainPanel *rootMain = dynamic_cast<MainPanel *>(gamePanels.Root().get());
+		if(rootMain && !rootMain->IsMenuBackdrop()
+				&& networkSession.Nickname() == player.NetworkNickname())
+		{
+			// The active flight was reattached by MultiplayerPanel before the
+			// asynchronous login completed. The menu reset above ensures a
+			// reconnect after a server restart cannot leave a start screen over
+			// the running game.
+			return;
+		}
+
+		// A returning player resumes the pilot save the server stored for this
+		// nickname (credits, ships, outfits, missions, conditions), so the
+		// shared world keeps their real progress across reconnects and server
+		// restarts. Otherwise adopt the server's own world (start system,
+		// planet, date, and spawn point) with a fresh pilot.
+		bool started = false;
+		if(networkSession.HasSavedPilot())
+		{
+			started = player.LoadNetworkPilot(networkSession.SavedPilot());
+			if(!started)
+				Logger::Log("The server's stored pilot save could not be parsed;"
+					" falling back to a fresh pilot.", Logger::Level::WARNING);
+		}
+		if(!started)
+			started = networkSession.HasWorldInfo()
+				? player.StartNetworkGame(networkSession.WorldInfo())
+				: player.StartNetworkGame();
+		if(!started)
+		{
+			Logger::Log("Login accepted, but no visible start scenario is available to"
+				" create a fresh pilot.", Logger::Level::WARNING);
+			menuPanels.Push(MultiplayerPanel::Info("Connected to the server, but no start"
+				" scenario is available to create a fresh pilot."));
+			return;
+		}
+
+		// This flight belongs to the login that just succeeded. A later login
+		// under a different nickname (or after a disconnect) must rebuild the
+		// pilot below instead of reusing it, so one remote player's save can
+		// never leak into another player's session.
+		player.SetNetworkNickname(networkSession.Nickname());
+
+		// Upload the freshly created (or resumed) pilot immediately so the
+		// server owns a real save even if the game ends before the first
+		// periodic sync.
+		if(player.GetPlanet())
+			networkSession.SendPilotSave(player.SaveToString());
+
+		Logger::Log("Login accepted (id " + to_string(networkSession.PlayerId())
+			+ "); entering the server's world.", Logger::Level::INFO);
+
+		gamePanels.Reset();
+		gamePanels.Push(new MainPanel(player, &networkSession.Game(), &networkSession));
+		// It takes one step to figure out the planet panel should be created,
+		// and another step to actually place it.
+		gamePanels.StepAll();
+		gamePanels.StepAll();
+		// The menu stack was cleared at the start of this callback, including
+		// panels queued with Push() but not yet stepped.
+	});
 
 	// Whether the game data is done loading. This is used to trigger any
 	// tests to run.
@@ -427,6 +539,8 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 		bool isPerformanceDisplayReady = false;
 		int step = 0;
 		int drawStep = 0;
+		auto lastServerSave = chrono::steady_clock::now();
+		auto lastPilotSync = chrono::steady_clock::now();
 
 		while(!menuPanels.IsDone())
 		{
@@ -447,6 +561,28 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			// no-op while not hosting, so it is safe to call every frame.
 			networkServer.Poll();
 			networkServer.Update(1. / 60.);
+			if(start - lastServerSave >= chrono::seconds(30))
+			{
+				lastServerSave = start;
+				const string saveError = networkServer.SaveWorld();
+				if(!saveError.empty())
+					Logger::Log("Could not save the LAN world: " + saveError,
+						Logger::Level::WARNING);
+			}
+
+			// Push the local player's full pilot state to the server every few
+			// seconds so the world file records real progress (credits, ships,
+			// outfits, missions, conditions), not just a position. Only a
+			// landed pilot is a valid save, matching normal Endless Sky
+			// behaviour; in-flight progress is captured the next time the
+			// player lands (and on disconnect).
+			if(networkSession.IsLoggedIn() && player.IsNetworkMode()
+					&& player.IsLoaded() && player.GetPlanet()
+					&& start - lastPilotSync >= chrono::seconds(10))
+			{
+				lastPilotSync = start;
+				networkSession.SendPilotSave(player.SaveToString());
+			}
 
 			SDL_Keymod mod = SDL_GetModState();
 			Font::ShowUnderlines(mod & KMOD_ALT);
@@ -471,6 +607,49 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 
 			// Tell all the panels to step forward, then draw them.
 			((!isDebugPaused && menuPanels.IsEmpty()) ? gamePanels : menuPanels).StepAll();
+
+			// Broadcast the local player's current input to the server. The
+			// flagship's Commands() reflect exactly what the engine applied
+			// during the step that just finished, so they are a faithful
+			// representation of how the player is steering.
+			if(inFlight && networkSession.IsLoggedIn())
+			{
+				MainPanel *mainPanel = static_cast<MainPanel *>(gamePanels.Root().get());
+				const Ship *flagship = player.Flagship();
+				if(mainPanel && flagship)
+				{
+					const Command &command = flagship->Commands();
+					float thrust = 0.f;
+					if(command.Has(Command::FORWARD))
+						thrust = 1.f;
+					else if(command.Has(Command::BACK))
+						thrust = -1.f;
+					networkSession.SendPlayerInput(0, thrust, static_cast<float>(command.Turn()));
+
+					// Tell the server what ship we are flying so remote
+					// clients can draw a representative sprite for us.
+					networkSession.SendShipModel(flagship->TrueModelName());
+
+					// Report our flagship's authoritative state. The server
+					// relays it so remote players see us at our real position
+					// inside our current system, not at some screen-anchored
+					// offset from themselves.
+					if(player.GetSystem())
+					{
+						NetworkShipState shipState;
+						const Point &position = flagship->Position();
+						const Point &velocity = flagship->Velocity();
+						shipState.x = position.X();
+						shipState.y = position.Y();
+						shipState.velocityX = velocity.X();
+						shipState.velocityY = velocity.Y();
+						shipState.angle = flagship->Facing().Degrees();
+						NetworkProtocol::WriteFixedString(shipState.system,
+							sizeof(shipState.system), player.GetSystem()->TrueName());
+						networkSession.SendShipState(shipState);
+					}
+				}
+			}
 
 			// Caps lock slows the frame rate in debug mode.
 			// Slowing eases in and out over a couple of frames.
@@ -590,6 +769,14 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 		{
 			ProcessEvents();
 
+			// Service the multiplayer session and LAN server every frame, the
+			// same as the normal game loop. Without this an integration test
+			// can never complete a login handshake, because the client socket
+			// is never polled.
+			networkSession.Update(1. / 60.);
+			networkServer.Poll();
+			networkServer.Update(1. / 60.);
+
 			// Handle any integration test steps.
 			if(dataFinishedLoading)
 			{
@@ -640,7 +827,9 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 	}
 
 	// If player quit while landed on a planet, save the game if there are changes.
-	if(player.GetPlanet() && gamePanels.CanSave())
+	if(player.GetPlanet() && gamePanels.CanSave()
+			&& !networkSession.IsNetworkMode() && !player.IsNetworkPilot()
+			&& !player.IsNetworkAttached())
 		player.Save();
 }
 

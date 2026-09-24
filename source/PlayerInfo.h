@@ -19,6 +19,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "CargoHold.h"
 #include "ConditionsStore.h"
 #include "CoreStartData.h"
+#include "DataFile.h"
 #include "DataNode.h"
 #include "DataWriter.h"
 #include "Date.h"
@@ -43,6 +44,9 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 class DistanceMap;
 class Outfit;
 class PilotProfile;
+namespace NetworkProtocol {
+	struct WorldInfo;
+}
 class Planet;
 class RaidFleet;
 class Rectangle;
@@ -87,10 +91,60 @@ public:
 	// Reset the player to an "empty" state, i.e. no player is loaded.
 	void Clear();
 
-	// Check if any player's information is loaded.
+	// Check if any player's information is loaded. An in-memory network pilot
+	// counts as loaded even though it has no single-player save path.
 	bool IsLoaded() const;
 	// Make a new player.
 	void New(const StartConditions &start, const std::shared_ptr<PilotProfile> &pilot);
+	// Begin a fresh, in-memory game using the first available start scenario.
+	// Used for save-free network play. Returns false if no start scenario is
+	// available or unlocked.
+	bool StartNetworkGame();
+	// Begin a fresh, in-memory game for save-free network play, but adopt the
+	// server's world (start system, planet, date, and spawn point) instead of
+	// the first available local start scenario. Returns false if no start
+	// scenario is available or unlocked.
+	bool StartNetworkGame(const NetworkProtocol::WorldInfo &world);
+	// Mark the current player as belonging to a multiplayer session. Network
+	// games are never written to the single-player save file.
+	void SetNetworkMode(bool enabled);
+	bool IsNetworkMode() const;
+	// Mark this player as having been attached to a network session. Unlike
+	// networkMode, this remains true after disconnect so a local pilot cannot
+	// be saved with network-mutated state; Clear() resets it for a new/loaded
+	// local game.
+	void SetNetworkAttached(bool enabled);
+	bool IsNetworkAttached() const;
+	// True for a pilot created for a network game, even while it is between
+	// connections. This keeps the in-memory flight available for reconnecting.
+	bool IsNetworkPilot() const;
+	// The nickname this pilot was created under for its current network
+	// session. A login may only reuse an in-flight network pilot when it is
+	// for the same nickname (the host's loopback flight); any other login
+	// rebuilds the pilot from the server's data, so a remote player can never
+	// carry another player's save into a new session. Cleared whenever the
+	// session goes offline, so a later login always builds the pilot from the
+	// network instead of reusing a stale flight.
+	void SetNetworkNickname(const std::string &nickname);
+	const std::string &NetworkNickname() const;
+	// Serialize the whole pilot as the text of a normal pilot save file.
+	// Network pilots are never written to disk locally; this text exists so it
+	// can be uploaded to the server, which persists each player's real
+	// progress (credits, ships, outfits, missions, conditions) in its own
+	// world file.
+	std::string SaveToString() const;
+	// Replace the current player with the state parsed from the text of a
+	// pilot save, using the supplied in-memory profile (no profile is loaded
+	// from disk). Returns false for empty or unparseable text. The loaded
+	// pilot keeps an empty file path and the network flags are set by
+	// LoadNetworkPilot(), so it still cannot be written to disk as a
+	// single-player save.
+	bool LoadFromText(const std::string &text, const std::shared_ptr<PilotProfile> &pilot);
+	// Resume an in-memory network pilot from the server's stored pilot save.
+	// Like StartNetworkGame(), this never touches a local save file and marks
+	// the pilot as a network pilot. Returns false when the text is empty or
+	// cannot be parsed as a pilot save.
+	bool LoadNetworkPilot(const std::string &text);
 	// Load an existing player.
 	void Load(const std::filesystem::path &path, const std::shared_ptr<PilotProfile> &pilot);
 	// Reload from the same file from which the current pilot was loaded.
@@ -99,6 +153,17 @@ public:
 	bool LoadRecent();
 	// Save this player (using the Identifier() as the file name).
 	void Save() const;
+	// Save the pilot profile, unless this player belongs to a network game.
+	// This keeps the gamerules panel from bypassing the player save guard.
+	void SavePilot() const;
+	// Convert this in-memory network pilot into an ordinary local pilot and
+	// save it to the single-player saves folder, preserving the current world
+	// state (system, planet, date, ships, credits, missions, conditions).
+	// Network pilots are never written automatically; this is the menu's
+	// explicit "keep this world" action, so a player can continue their
+	// server progress offline. Returns false if no pilot is loaded or the
+	// world cannot be saved.
+	bool SaveToLocalFolder();
 
 	// Get the pilot profile that this player is from.
 	std::shared_ptr<PilotProfile> &Pilot();
@@ -444,6 +509,13 @@ private:
 	void Autosave() const;
 	void Save(const std::string &path) const;
 	void Save(DataWriter &out) const;
+	// The shared parsing body of Load() and LoadFromText(): apply every node
+	// of the given DataFile to this player. savePath becomes the player's file
+	// path ("" keeps it a pure in-memory pilot that cannot be written out).
+	// Returns whether the block contained the "pilot" record that Save()
+	// always writes; a nameless network pilot still has that record, so it is
+	// accepted, while a block without it is not a pilot save.
+	bool LoadFromData(DataFile &file, const std::string &savePath);
 
 	// Check for and apply any punitive actions from planetary security.
 	void Fine(UI &ui);
@@ -481,6 +553,19 @@ private:
 	std::string originalLastName;
 	std::string filePath;
 	std::shared_ptr<PilotProfile> pilot;
+	// True while this player is being used for multiplayer. Such a player is
+	// intentionally not persisted to its single-player save path.
+	bool networkMode = false;
+	// True for the lifetime of an in-memory network pilot. Unlike networkMode,
+	// this remains true while the client is disconnected so it can rejoin.
+	bool networkPilot = false;
+	// True after any local pilot has been attached to a network session. This
+	// deliberately survives Disconnect() so network-mutated state cannot be
+	// written to the pilot's original single-player file.
+	bool networkAttached = false;
+	// The nickname this pilot was created under for its current network
+	// session; see NetworkNickname().
+	std::string networkNickname;
 
 	Date date;
 	SystemEntry entry = SystemEntry::TAKE_OFF;

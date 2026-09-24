@@ -21,12 +21,14 @@
 
 class NetworkServer;
 class NetworkSession;
+class PlayerInfo;
 class TextArea;
+class UI;
 
 class HostPanel : public Panel
 {
 public:
-	HostPanel(NetworkServer &server, NetworkSession &session);
+	HostPanel(PlayerInfo &player, UI &gamePanels, NetworkServer &server, NetworkSession &session);
 	virtual ~HostPanel() override;
 
 	virtual void Step() override;
@@ -50,13 +52,15 @@ private:
 
 	// Validate the fields and, if they are valid, start hosting.
 	void StartHosting();
+	// Show an error message to the player.
+	void ShowError(const std::string &message);
 	// Stop the server and the local connection, returning to the setup view.
 	void StopHosting();
 	// Refresh the status line shown while hosting.
 	void RefreshStatus();
-	//Show and error message to the player
-	void ShowError(const std::string &message);
 
+	PlayerInfo *player = nullptr;
+	UI *gamePanels = nullptr;
 	NetworkServer *server = nullptr;
 	NetworkSession *session = nullptr;
 
@@ -68,6 +72,11 @@ private:
 
 	// True once the server has been started and we are showing the live view.
 	bool hosting = false;
+	// True when this panel started the server. A successfully started server is
+	// detached from the panel before the panel is closed, so its lifetime is
+	// not tied to this dialog's destructor.
+	bool ownsServer = false;
+	bool leaveServerRunning = false;
 	// A human-readable status line (player count, errors, ...).
 	std::string status;
 

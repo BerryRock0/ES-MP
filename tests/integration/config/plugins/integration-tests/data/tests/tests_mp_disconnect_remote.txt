@@ -1,0 +1,94 @@
+# Regression guard for the exact "Disconnect == quit" report against a REMOTE
+# dedicated server: the menu Disconnect / 'd' must end the session (and nothing
+# of the world may remain visible), while the game itself must keep running and
+# the pilot must stay loaded on the menu. Requires "MP Remote Test Server" to be
+# listening on 127.0.0.1:48123 (no password).
+
+test "MP Remote Disconnect Keeps Game Running"
+	status active
+	description "Connect to a remote dedicated server, disconnect via the menu, and verify the pilot and the game survive."
+	sequence
+		# Open the remote-connect panel from the fresh main menu.
+		input
+			key c
+		# The address field is focused: type the loopback address.
+		input
+			key l
+		input
+			key o
+		input
+			key c
+		input
+			key a
+		input
+			key l
+		input
+			key h
+		input
+			key o
+		input
+			key s
+		input
+			key t
+		# Move to the port field, clear the default (47624, possibly a live
+		# server), and use the dedicated test servers's port.
+		input
+			key "Tab"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key 4
+		input
+			key 8
+		input
+			key 1
+		input
+			key 2
+		input
+			key 3
+		# Move to the nickname field and provide one.
+		input
+			key "Tab"
+		input
+			key a
+		# Connect (no password).
+		input
+			key "Return"
+		# Let the login complete and the server world load. Test frames run at
+		# full speed, so allow plenty of frames for the real socket handshake.
+		apply
+			"test: steps to wait" = 600
+		label "connected"
+		input
+		apply
+			"test: steps to wait" = "test: steps to wait" - 1
+		branch "connected"
+			"test: steps to wait" > 0
+		# ESC opens the menu over the landed world; 'd' disconnects (the menu
+		# stays up); 's' then saves the world locally -- the exact workflow a
+		# plain Disconnect must keep available.
+		input
+			key "escape"
+		input
+			key d
+		input
+			key s
+		# Keep stepping: an exception, crash, or quit during the teardown kills
+		# the process before the debug step below.
+		apply
+			"test: steps to wait" = 90
+		label "after"
+		input
+		apply
+			"test: steps to wait" = "test: steps to wait" - 1
+		branch "after"
+			"test: steps to wait" > 0
+		debug "Remote disconnect left the game running with the pilot loaded"

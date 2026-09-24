@@ -22,6 +22,8 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <list>
 
+class GameModel;
+class NetworkSession;
 class PlayerInfo;
 class ShipEvent;
 
@@ -33,7 +35,7 @@ class ShipEvent;
 // needed to move the ships around and to figure out where they should be drawn.
 class MainPanel : public Panel {
 public:
-	explicit MainPanel(PlayerInfo &player);
+	explicit MainPanel(PlayerInfo &player, GameModel *game = nullptr, NetworkSession *session = nullptr);
 
 	virtual void Step() override;
 	virtual void Draw() override;
@@ -48,6 +50,16 @@ public:
 
 	// Get the underlying game engine used by the game.
 	Engine &GetEngine();
+	// Attach (or detach, with nullptr) the shared multiplayer world.
+	void SetGameModel(GameModel *sharedWorld);
+	// Attach (or detach, with nullptr) the active network session, enabling the
+	// in-game chat panel.
+	void SetSession(NetworkSession *session);
+	// Mark this flight as the main menu's backdrop (the ship shown behind the
+	// menu), which is not the player's active game.
+	void SetIsMenuBackdrop(bool isMenuBackdrop);
+	// Whether this is the main menu's backdrop flight.
+	bool IsMenuBackdrop() const noexcept;
 
 
 protected:
@@ -64,12 +76,20 @@ private:
 	bool ShowHailPanel();
 	bool ShowHelp(bool force);
 	void StepEvents(bool &isActive);
+	void DrawNetworkPlayers();
 
 
 private:
 	PlayerInfo &player;
 
 	Engine engine;
+	// True if this panel is the main menu's backdrop flight (not a real game).
+	bool isMenuBackdrop = false;
+	// The shared multiplayer world, if the player has connected to a server.
+	GameModel *game = nullptr;
+	// The active network session, if the player is playing multiplayer. Lets
+	// the main panel open the in-game chat panel.
+	NetworkSession *session = nullptr;
 
 	// These are the pending ShipEvents that have yet to be processed.
 	std::list<ShipEvent> eventQueue;

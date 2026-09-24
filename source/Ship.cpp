@@ -3245,10 +3245,29 @@ int Ship::TakeDamage(vector<Visual> &visuals, const DamageDealt &damage, const G
 		lastHitBy = sourceGovernment;
 	damageOverlayTimer = TOTAL_DAMAGE_FRAMES;
 
+	// TEMPORARY DIAGNOSTIC: log damage applied to owned ships so the cause of
+	// the disappearing developer ships can be pinpointed. Remove once resolved.
+	if(IsYours())
+	{
+		const double hullBefore = levels.hull;
+		const double shieldsBefore = levels.shields;
+		levels.Damage(damage.Levels());
+		if(levels.hull < hullBefore || levels.shields < shieldsBefore)
+			Logger::Log("DEATH-DIAG: your " + DisplayModelName() + " took hull dmg "
+				+ std::to_string(hullBefore - levels.hull) + ", shield dmg "
+				+ std::to_string(shieldsBefore - levels.shields)
+				+ " (hull now " + std::to_string(levels.hull) + ")"
+				+ " from " + (sourceGovernment ? sourceGovernment->TrueName() : "hazard")
+				+ " at " + std::to_string(position.X()) + "," + std::to_string(position.Y())
+				+ " landed=" + (zoom == 0. && landingPlanet ? "yes" : "no"),
+				Logger::Level::WARNING);
+	}
+	else
+		levels.Damage(damage.Levels());
+
 	bool wasDisabled = IsDisabled();
 	bool wasDestroyed = IsDestroyed();
 
-	levels.Damage(damage.Levels());
 	if(damage.Levels().shields && !isDisabled)
 	{
 		int disabledDelay = cache.depletedShieldDelay;

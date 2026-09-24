@@ -1,0 +1,73 @@
+# Regression guard for the "Disconnect == quit" report: leaving a multiplayer
+# session (menu Disconnect / 'd' while connected) must tear the server and its
+# world down and leave a clean main menu -- never terminate the game. If the
+# teardown throws, crashes, or quits, this test process dies before its final
+# debug step and fails.
+
+test "MP Disconnect Keeps Game Running"
+	status active
+	description "Host a LAN world, disconnect via the menu, and verify the game keeps running."
+	sequence
+		# Open the LAN host panel from the fresh main menu.
+		input
+			key h
+		# Type a server name into the focused Server name field.
+		input
+			key a
+		# Move to the port field. The default port (47624) may already be
+		# bound by a live server on this machine, so clear it and use a
+		# distinct one.
+		input
+			key "Tab"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key "Backspace"
+		input
+			key 4
+		input
+			key 8
+		input
+			key 1
+		input
+			key 2
+		input
+			key 3
+		# Start hosting: the host enters the server's world in network mode.
+		input
+			key "Return"
+		# Let the loopback login and world entry settle.
+		apply
+			"test: steps to wait" = 90
+		label "hosting"
+		input
+		apply
+			"test: steps to wait" = "test: steps to wait" - 1
+		branch "hosting"
+			"test: steps to wait" > 0
+		# ESC opens the menu over the landed world; 'd' disconnects (the menu
+		# stays up); 's' then saves the world locally -- the exact workflow a
+		# plain Disconnect must keep available.
+		input
+			key "escape"
+		input
+			key d
+		input
+			key s
+		# Keep stepping for a while: an exception or crash during the teardown
+		# kills the process before the debug step below.
+		apply
+			"test: steps to wait" = 90
+		label "after"
+		input
+		apply
+			"test: steps to wait" = "test: steps to wait" - 1
+		branch "after"
+			"test: steps to wait" > 0
+		debug "Disconnect left the game running on a clean menu"

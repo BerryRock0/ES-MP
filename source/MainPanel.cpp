@@ -16,24 +16,35 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "MainPanel.h"
 
 #include "BoardingPanel.h"
+#include "Angle.h"
+#include "ChatPanel.h"
 #include "comparators/ByGivenOrder.h"
 #include "CategoryList.h"
 #include "CoreStartData.h"
 #include "DialogPanel.h"
+#include "text/Font.h"
+#include "text/FontSet.h"
 #include "text/Format.h"
 #include "GameData.h"
+#include "GameModel.h"
 #include "Government.h"
 #include "HailPanel.h"
+#include "image/Sprite.h"
 #include "shader/LineShader.h"
 #include "MapDetailPanel.h"
 #include "MessageLogPanel.h"
 #include "Messages.h"
 #include "Mission.h"
+#include "NetworkSession.h"
 #include "Planet.h"
 #include "PlanetPanel.h"
 #include "PlayerInfo.h"
 #include "PlayerInfoPanel.h"
 #include "Preferences.h"
+#include "Screen.h"
+#include "shader/PointerShader.h"
+#include "shader/RingShader.h"
+#include "shader/SpriteShader.h"
 #include "Ship.h"
 #include "ShipEvent.h"
 #include "StellarObject.h"
@@ -50,8 +61,8 @@ using namespace std;
 
 
 
-MainPanel::MainPanel(PlayerInfo &player)
-	: player(player), engine(player)
+MainPanel::MainPanel(PlayerInfo &player, GameModel *game, NetworkSession *session)
+	: player(player), engine(player), game(game), session(session)
 {
 	SetIsFullScreen(true);
 }
@@ -159,6 +170,78 @@ void MainPanel::Draw()
 		else
 			isDragging = false;
 	}
+
+	DrawNetworkPlayers();
+}
+
+
+void MainPanel::DrawNetworkPlayers()
+{
+	if(!game || !game->IsConnected())
+		return;
+
+	const Ship *localShip = player.Flagship();
+	const System *localSystem = player.GetSystem();
+	if(!localShip || !localSystem)
+		return;
+
+	// Remote ships are reported at their absolute position within a
+	// particular system, so they can be drawn like any other object in the
+	// local world. Players in other systems are simply not rendered here.
+	const std::string &localSystemName = localSystem->TrueName();
+	const Point camera = engine.CameraCenter();
+	const double zoom = engine.GetZoom();
+
+	const Font &font = FontSet::Get(Preferences::GetFontSize());
+	const double radius = 14. * zoom;
+
+	const Color color(.9f, .5f, .2f, .95f);
+	const Color dim(.5f, .3f, .15f, .6f);
+
+	for(const auto &it : game->Ships())
+	{
+		const NetworkShip &ship = it.second;
+		// The local player's real ship is already drawn by the engine, right
+		// where it is on the map, so only render the remote players.
+		if(ship.id == game->LocalPlayerId())
+			continue;
+		if(ship.system.empty() || ship.system != localSystemName)
+			continue;
+
+		const Point screenPos = (ship.position - camera) * zoom;
+
+		// Draw a representative sprite for the remote player's flagship so it
+		// reads as an actual ship rather than an abstract marker.
+		const Ship *definition = GameData::Ships().Find(ship.model);
+		const Sprite *sprite = definition ? definition->GetSprite() : nullptr;
+		if(sprite)
+		{
+			// Match how the engine draws ships: half the sprite's pixel size by
+			// default (2 sprite pixels per world unit), scaled by the ship's own
+			// zoom and scale, then by the camera zoom. Without the half, remote
+			// ships would render at twice the local ship's size.
+			const float sizeZoom = static_cast<float>(zoom * .5 * definition->Zoom() * definition->Scale().X());
+			SpriteShader::Draw(sprite, screenPos, sizeZoom, nullptr, 0.f, Angle(ship.angle).Unit());
+		}
+		else
+		{
+			// Unknown model: fall back to a heading chevron so the remote
+			// player is still distinguishable.
+			Angle heading(ship.angle);
+			PointerShader::Draw(screenPos, heading.Unit(), 10. * zoom, 24. * zoom, -6. * zoom, color);
+		}
+
+		// Only draw the ring and label when the remote ship is on screen.
+		if(std::fabs(screenPos.X()) <= Screen::Width() * .5 + radius
+				&& std::fabs(screenPos.Y()) <= Screen::Height() * .5 + radius)
+		{
+			RingShader::Draw(screenPos, static_cast<float>(radius),
+				2.5f * static_cast<float>(zoom), 1.f, dim);
+
+			std::string label = "Player " + std::to_string(ship.id);
+			font.Draw(label, screenPos + Point(font.Width(label) * -.5, radius + 6. * zoom), dim);
+		}
+	}
 }
 
 
@@ -200,6 +283,34 @@ Engine &MainPanel::GetEngine()
 
 
 
+void MainPanel::SetGameModel(GameModel *sharedWorld)
+{
+	game = sharedWorld;
+}
+
+
+
+void MainPanel::SetSession(NetworkSession *networkSession)
+{
+	session = networkSession;
+}
+
+
+
+void MainPanel::SetIsMenuBackdrop(bool isMenuBackdrop)
+{
+	this->isMenuBackdrop = isMenuBackdrop;
+}
+
+
+
+bool MainPanel::IsMenuBackdrop() const noexcept
+{
+	return isMenuBackdrop;
+}
+
+
+
 // Only override the ones you need; the default action is to return false.
 bool MainPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
@@ -228,6 +339,14 @@ bool MainPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		Preferences::ZoomViewIn();
 	else if(key >= '0' && key <= '9' && !command)
 		engine.SelectGroup(key - '0', mod & KMOD_SHIFT, mod & (KMOD_CTRL | KMOD_GUI));
+	else if((key == SDLK_RETURN || key == SDLK_KP_ENTER) && session
+			&& (session->IsLoggedIn() || session->HasLastServer()) && !command)
+		// Open the in-game chat overlay: while connected it lets the player
+		// talk to other players on the server (and disconnect), and after an
+		// unplanned drop it offers "Return to server" to rejoin the same
+		// server. A deliberate disconnect is final, so no overlay opens after
+		// it.
+		GetUI().Push(new ChatPanel(*session));
 	else
 		return false;
 

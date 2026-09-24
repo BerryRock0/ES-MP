@@ -87,6 +87,12 @@ public:
 	// Give a command on behalf of the player, used for integration tests.
 	void GiveCommand(const Command &command);
 
+	// The center of the camera view, in world units. Used by external panels
+	// to draw overlays that align with the game view.
+	const Point &CameraCenter() const;
+	// The current zoom factor applied to world-to-screen conversions.
+	double GetZoom() const;
+
 	// Get any special events that happened in this step.
 	// MainPanel::Step will clear this list.
 	std::list<ShipEvent> &Events();

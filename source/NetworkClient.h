@@ -27,6 +27,11 @@ public:
 	using LoginHandler = std::function<void(bool accepted, const std::string &reason, uint32_t playerId)>;
 	// Called when the server relays a chat line.
 	using ChatHandler = std::function<void(const NetworkProtocol::ChatMessage &)>;
+	// Called when the server tells us what world it owns.
+	using WorldInfoHandler = std::function<void(const NetworkProtocol::WorldInfo &)>;
+	// Called when the server returns our stored pilot save (if any). Sent
+	// before the login is accepted.
+	using SavedPilotHandler = std::function<void(const std::string &text)>;
 	// Called when the connection is lost or the server shuts down.
 	using DisconnectHandler = std::function<void(const std::string &reason)>;
 
@@ -40,6 +45,8 @@ public:
 	void SetSnapshotHandler(SnapshotHandler handler);
 	void SetLoginHandler(LoginHandler handler);
 	void SetChatHandler(ChatHandler handler);
+	void SetWorldInfoHandler(WorldInfoHandler handler);
+	void SetSavedPilotHandler(SavedPilotHandler handler);
 	void SetDisconnectHandler(DisconnectHandler handler);
 
 	// Open a TCP connection to the given host and port. This does not perform
@@ -54,6 +61,18 @@ public:
 
 	// Send a chat line to the server.
 	void SendChat(const std::string &text);
+
+	// Tell the server which ship the local player is flying, so it can be
+	// relayed to other clients and drawn there.
+	void SendShipModel(const std::string &model);
+
+	// Send the authoritative state of the local flagship.
+	void SendShipState(const NetworkShipState &state);
+
+	// Upload the local player's full serialized pilot save to the server so
+	// it can persist real progress (credits, ships, outfits, missions,
+	// conditions) in its own world file.
+	void SendPilotSave(const std::string &text);
 
 	// Receive and dispatch any pending messages. Call every frame.
 	void Poll();
@@ -77,6 +96,8 @@ private:
 	SnapshotHandler snapshotHandler;
 	LoginHandler loginHandler;
 	ChatHandler chatHandler;
+	WorldInfoHandler worldInfoHandler;
+	SavedPilotHandler savedPilotHandler;
 	DisconnectHandler disconnectHandler;
 
 	bool connected = false;

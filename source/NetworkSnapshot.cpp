@@ -6,27 +6,21 @@ namespace
 {
 // The size, in bytes, of a single serialized ship record. Used to sanity-check
 // the ship count advertised by a packet before allocating memory for it.
+// The record is: id (u32) + x/y/vx/vy/angle (5 doubles) + hull (u32)
+// + model (32 bytes) + system (32 bytes). All integers are little-endian,
+// matching the rest of NetworkProtocol.
 constexpr size_t SHIP_RECORD_SIZE =
-    sizeof(uint32_t) +      // id
-    sizeof(double) * 5 +    // x, y, velocityX, velocityY, angle
-    sizeof(int);            // hull
+    sizeof(uint32_t) +                // id
+    sizeof(double) * 5 +              // x, y, velocityX, velocityY, angle
+    sizeof(uint32_t) +                // hull
+    NetworkProtocol::MAX_SHIP_MODEL_LENGTH + // model
+    NetworkProtocol::MAX_SYSTEM_LENGTH;      // system
 
+// Copy a fixed-size field in and out of the buffer. These are raw byte
+// copies (for the char arrays); all numeric fields go through the explicit
+// little-endian helpers below so the wire format is architecture-independent.
 template <typename T>
-void Write(
-    std::vector<uint8_t> &output,
-    const T &value)
-{
-    const auto *bytes =
-        reinterpret_cast<const uint8_t *>(&value);
-
-    output.insert(
-        output.end(),
-        bytes,
-        bytes + sizeof(T));
-}
-
-template <typename T>
-bool Read(
+bool ReadBytes(
     const uint8_t *data,
     size_t size,
     size_t &offset,
@@ -75,18 +69,22 @@ NetworkSnapshot::Serialize() const
     const uint32_t shipCount =
         static_cast<uint32_t>(ships.size());
 
-    Write(output, tick);
-    Write(output, shipCount);
+    NetworkProtocol::WriteUint32(output, tick);
+    NetworkProtocol::WriteUint32(output, shipCount);
 
     for(const NetworkShipState &ship : ships)
     {
-        Write(output, ship.id);
-        Write(output, ship.x);
-        Write(output, ship.y);
-        Write(output, ship.velocityX);
-        Write(output, ship.velocityY);
-        Write(output, ship.angle);
-        Write(output, ship.hull);
+        NetworkProtocol::WriteUint32(output, ship.id);
+        NetworkProtocol::WriteDouble(output, ship.x);
+        NetworkProtocol::WriteDouble(output, ship.y);
+        NetworkProtocol::WriteDouble(output, ship.velocityX);
+        NetworkProtocol::WriteDouble(output, ship.velocityY);
+        NetworkProtocol::WriteDouble(output, ship.angle);
+        // Preserve the bit pattern of the (possibly negative) int hull value.
+        // Since C++20 signed integers are two's complement, this round-trips.
+        NetworkProtocol::WriteUint32(output, static_cast<uint32_t>(ship.hull));
+        NetworkProtocol::WriteBytes(output, ship.model, sizeof(ship.model));
+        NetworkProtocol::WriteBytes(output, ship.system, sizeof(ship.system));
     }
 
     return output;
@@ -104,11 +102,15 @@ bool NetworkSnapshot::Deserialize(
     uint32_t newTick = 0;
     uint32_t shipCount = 0;
 
-    if(!Read(data, size, offset, newTick))
+    if(offset > size || sizeof(uint32_t) > size - offset)
         return false;
+    newTick = NetworkProtocol::ReadUint32(data + offset);
+    offset += sizeof(uint32_t);
 
-    if(!Read(data, size, offset, shipCount))
+    if(offset > size || sizeof(uint32_t) > size - offset)
         return false;
+    shipCount = NetworkProtocol::ReadUint32(data + offset);
+    offset += sizeof(uint32_t);
 
     // Prevent malformed packets from allocating excessive memory. The count
     // must also be consistent with the number of bytes actually remaining.
@@ -123,26 +125,49 @@ bool NetworkSnapshot::Deserialize(
     {
         NetworkShipState ship;
 
-        if(!Read(data, size, offset, ship.id))
+        if(offset > size || sizeof(uint32_t) > size - offset)
             return false;
+        ship.id = NetworkProtocol::ReadUint32(data + offset);
+        offset += sizeof(uint32_t);
 
-        if(!Read(data, size, offset, ship.x))
+        if(offset > size || sizeof(double) > size - offset)
             return false;
+        ship.x = NetworkProtocol::ReadDouble(data + offset);
+        offset += sizeof(double);
 
-        if(!Read(data, size, offset, ship.y))
+        if(offset > size || sizeof(double) > size - offset)
             return false;
+        ship.y = NetworkProtocol::ReadDouble(data + offset);
+        offset += sizeof(double);
 
-        if(!Read(data, size, offset, ship.velocityX))
+        if(offset > size || sizeof(double) > size - offset)
             return false;
+        ship.velocityX = NetworkProtocol::ReadDouble(data + offset);
+        offset += sizeof(double);
 
-        if(!Read(data, size, offset, ship.velocityY))
+        if(offset > size || sizeof(double) > size - offset)
             return false;
+        ship.velocityY = NetworkProtocol::ReadDouble(data + offset);
+        offset += sizeof(double);
 
-        if(!Read(data, size, offset, ship.angle))
+        if(offset > size || sizeof(double) > size - offset)
             return false;
+        ship.angle = NetworkProtocol::ReadDouble(data + offset);
+        offset += sizeof(double);
 
-        if(!Read(data, size, offset, ship.hull))
+        if(offset > size || sizeof(uint32_t) > size - offset)
             return false;
+        ship.hull = static_cast<int>(
+            NetworkProtocol::ReadUint32(data + offset));
+        offset += sizeof(uint32_t);
+
+        if(!ReadBytes(data, size, offset, ship.model))
+            return false;
+        ship.model[NetworkProtocol::MAX_SHIP_MODEL_LENGTH - 1] = '\0';
+
+        if(!ReadBytes(data, size, offset, ship.system))
+            return false;
+        ship.system[NetworkProtocol::MAX_SYSTEM_LENGTH - 1] = '\0';
 
         result.AddShip(ship);
     }

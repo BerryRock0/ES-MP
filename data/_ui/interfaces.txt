@@ -345,12 +345,36 @@ interface "main menu"
 	button m "_Manage Pilots..."
 		center 300 155
 		dimensions 120 30
+	
+	# Boxes for the two LAN buttons, like the Gamerules button:
+	sprite "ui/very wide button"
+		center 300 195
 	button c "_Connect to Server"
 		center 300 195
 		dimensions 90 30
+	sprite "ui/very wide button"
+		center 300 235
 	button h "_Start LAN World"
 		center 300 235
 		dimensions 120 30
+	
+	visible if "server connected"
+	box "disconnect"
+		from 240 260
+		to 360 290
+	sprite "ui/very wide button"
+		center 300 275
+	button d "_Disconnect"
+		center 300 275
+		dimensions 120 30
+	visible
+
+	# Button for keeping an in-memory network world in the local saves folder:
+	visible if "network pilot loaded"
+	button s "_Save World Locally"
+		center 435 235
+		dimensions 150 30
+	visible
 	
 	# Left panel (credits):
 	button q "_Quit"

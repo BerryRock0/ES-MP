@@ -48,6 +48,8 @@ target_sources(EndlessSkyLib PRIVATE
 	CategoryList.cpp
 	CategoryList.h
 	CategoryType.h
+	ChatPanel.cpp
+	ChatPanel.h
 	ClickZone.h
 	Collision.cpp
 	Collision.h

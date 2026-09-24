@@ -23,6 +23,8 @@
 #include "text/Font.h"
 #include "text/FontSet.h"
 #include "GameData.h"
+#include "MainPanel.h"
+#include "Messages.h"
 #include "Point.h"
 #include "Preferences.h"
 #include "Screen.h"
@@ -93,7 +95,7 @@ MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(std::function<void()> okFun
 
 // The multiplayer connection panel. It is a normal dialog whose "OK" button is
 // labelled "Connect", plus two text fields for the server address and port.
-MultiplayerPanel::MultiplayerPanel(NetworkSession &session)
+MultiplayerPanel::MultiplayerPanel(NetworkSession &session, UI &gamePanels)
 	: MultiplayerPanel([]() -> MultiplayerInit
 		{
 			MultiplayerInit init;
@@ -104,16 +106,46 @@ MultiplayerPanel::MultiplayerPanel(NetworkSession &session)
 		}())
 {
 	networkSession = &session;
+	this->gamePanels = &gamePanels;
 
 	okText = "Connect";
 	cancelText = "Cancel";
-	numButtons = 2;
 	canCancel = true;
+	// The third button is contextual: it is only shown while this client has
+	// an open connection, and then disconnects that connection.
+	buttonThree.buttonAction = [this](const std::string &)
+	{
+		return DisconnectFromServer({});
+	};
 
 	// Sensible defaults: focus the address field and pre-fill the default port.
 	focusedField = Field::Address;
 	port = std::to_string(NetworkProtocol::DEFAULT_PORT);
 
+	// Return to server: if this session remembers a server it connected to
+	// before, pre-fill the whole form with its address, port, nickname, and
+	// password and rename the OK button, so the player can jump straight back
+	// into that server instead of retyping everything. A deliberate disconnect
+	// is final (no "Return to server"), but the remembered server still
+	// pre-fills the form for a fresh connect with the plain "Connect" label.
+	if(session.HasLastServer())
+	{
+		address = session.LastAddress();
+		port = std::to_string(session.LastPort());
+		nickname = session.LastNickname();
+		password = session.LastPassword();
+		okText = "Return to server";
+	}
+	else if(session.HasConnectedServer())
+	{
+		address = session.LastAddress();
+		port = std::to_string(session.LastPort());
+		nickname = session.LastNickname();
+		password = session.LastPassword();
+		okText = "Connect";
+	}
+
+	UpdateConnectionButtons();
 	Resize();
 }
 
@@ -160,6 +192,7 @@ MultiplayerPanel::MultiplayerPanel(MultiplayerInit init)
 void MultiplayerPanel::Draw()
 {
 	DrawBackdrop();
+	UpdateConnectionButtons();
 
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
@@ -316,7 +349,8 @@ void MultiplayerPanel::Resize()
 	// Resize textRectSize to match the visual height of the dialog, which will
 	// be rounded up from the actual text height by the number of panels that
 	// were added. This helps correctly position the TextArea scroll buttons.
-	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * (networkSession != nullptr)) * AcceptsInput();
+	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height()
+		- ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * (networkSession != nullptr)) * AcceptsInput();
 
 	Rectangle textRect = Rectangle::FromCorner(textPos, textRectSize);
 	text->SetRect(textRect);
@@ -366,6 +400,7 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 	// into the address/port fields, tab switches fields, and enter connects.
 	if(networkSession)
 	{
+		UpdateConnectionButtons();
 		std::string *field = FocusedField();
 		// SDL text input is not active for this panel, so printable characters
 		// must be read from the key events themselves rather than from TextInput().
@@ -388,9 +423,10 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 					valid = std::isdigit(c);
 					break;
 				case Field::Nickname:
-					valid = (std::isalnum(c) || c == '_' || c == '-')
-						&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
-					break;
+				// LAN play is trusted; accept any printable character.
+				valid = (c >= ' ' && c <= '~')
+					&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
+				break;
 				case Field::Password:
 					valid = (c >= ' ' && c <= '~')
 						&& field->size() < NetworkProtocol::MAX_PASSWORD_LENGTH - 1;
@@ -402,7 +438,7 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 				flickerTime = 18;
 			return true;
 		}
-		
+
 		if(key == SDLK_BACKSPACE || key == SDLK_DELETE)
 		{
 			if(field && !field->empty())
@@ -423,7 +459,15 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 		}
 		if(key == SDLK_RETURN || key == SDLK_KP_ENTER)
 		{
-			Connect();
+			if(activeButton == 3 && buttonThree.buttonAction)
+			{
+				if(buttonThree.buttonAction(input))
+					GetUI().Pop(this);
+			}
+			else if(activeButton == 2)
+				GetUI().Pop(this);
+			else
+				Connect();
 			return true;
 		}
 		if(key == SDLK_ESCAPE)
@@ -431,7 +475,7 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 			GetUI().Pop(this);
 			return true;
 		}
-		// All other keys are ignored; printable text arrives via TextInput().
+		// All other keys are ignored here.
 		return true;
 	}
 
@@ -530,6 +574,8 @@ bool MultiplayerPanel::Click(int x, int y, MouseButton button, int clicks)
 {
 	if(button != MouseButton::LEFT)
 		return false;
+	if(networkSession)
+		UpdateConnectionButtons();
 
 	Point clickPos(x, y);
 
@@ -589,7 +635,9 @@ bool MultiplayerPanel::Click(int x, int y, MouseButton button, int clicks)
 		if(std::fabs(third.X()) < toleranceX && std::fabs(third.Y()) < toleranceY)
 		{
 			activeButton = 3;
-			return DoKey(SDLK_RETURN);
+			if(buttonThree.buttonAction && buttonThree.buttonAction(input))
+				GetUI().Pop(this);
+			return true;
 		}
 	}
 
@@ -620,9 +668,9 @@ bool MultiplayerPanel::TextInput(const std::string &text)
 				if(std::isdigit(character))
 					field->push_back(static_cast<char>(character));
 				break;
-			case Field::Nickname:
-				// Nicknames allow letters, digits, and a few separators.
-				if((std::isalnum(character) || character == '_' || character == '-')
+case Field::Nickname:
+				// LAN play is trusted; accept any printable character.
+				if(character >= ' ' && character <= '\177'
 					&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1)
 					field->push_back(static_cast<char>(character));
 				break;
@@ -695,10 +743,59 @@ std::string *MultiplayerPanel::FocusedField()
 	return nullptr;
 }
 
+void MultiplayerPanel::UpdateConnectionButtons()
+{
+	if(!networkSession)
+		return;
+
+	const bool connected = networkSession->IsConnected();
+	buttonThree.buttonLabel = connected ? "Disconnect" : "";
+	numButtons = connected ? 3 : 2;
+	if(activeButton > numButtons)
+		activeButton = 1;
+
+	if(connected)
+	{
+		// Keep the Connect button visible beside Disconnect, but do not allow
+		// a second connection attempt while this one is already open.
+		okText = "Connect";
+		isOkDisabled = true;
+	}
+	else
+	{
+		okText = networkSession->HasLastServer() ? "Return to server" : "Connect";
+		isOkDisabled = false;
+	}
+}
+
+
+
+bool MultiplayerPanel::DisconnectFromServer(const std::string &)
+{
+	if(!networkSession)
+		return false;
+
+	// The button is drawn only for an active connection, but perform the
+	// cleanup unconditionally so a state transition between drawing and
+	// clicking cannot leave the session alive.
+	networkSession->Disconnect();
+	if(gamePanels)
+		gamePanels->CanSave(true);
+	Messages::Add({"Disconnected from the server.", GameData::MessageCategories().Get("info")});
+	return true;
+}
+
+
+
 void MultiplayerPanel::Connect()
 {
 	if(!networkSession)
 		return;
+	if(networkSession->IsConnected())
+	{
+		UpdateConnectionButtons();
+		return;
+	}
 
 	if(address.empty())
 	{
@@ -741,17 +838,40 @@ void MultiplayerPanel::Connect()
 	}
 
 	connecting = true;
+	const bool couldSave = gamePanels && gamePanels->CanSave();
 	const bool connected = networkSession->Connect(address, static_cast<uint16_t>(parsedPort),
 		nickname, password);
 	connecting = false;
 
 	if(connected)
 	{
+		if(gamePanels)
+			gamePanels->CanSave(false);
+		// Attach the shared world to this client's active flight (if there is
+		// one), so remote ships are drawn on the joiner's screen as well. The
+		// main menu's backdrop flight is not the player's game; it gets replaced
+		// once the login succeeds. If the joiner is not in flight yet, stay in
+		// the menu; they can start or load a game and connect again from the
+		// in-game menu.
+		if(gamePanels)
+		{
+			MainPanel *active = dynamic_cast<MainPanel *>(gamePanels->Root().get());
+			if(active && !active->IsMenuBackdrop())
+			{
+				active->SetGameModel(&networkSession->Game());
+				active->SetSession(networkSession);
+			}
+		}
+
 		// The session is connected; close this dialog so the game can continue.
 		GetUI().Pop(this);
 	}
 	else
+	{
+		if(gamePanels)
+			gamePanels->CanSave(couldSave);
 		ShowError("Could not connect to the server.");
+	}
 }
 
 void MultiplayerPanel::ShowError(const std::string &message)
