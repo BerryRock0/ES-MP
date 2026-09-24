@@ -198,7 +198,7 @@ void NetworkClient::Login(const std::string &nickname, const std::string &passwo
 	if(!connected || socketFd < 0)
 		return;
 
-	SendMessage(NetworkProtocol::MessageType::LoginRequest,
+	SendServerMessage(NetworkProtocol::MessageType::LoginRequest,
 		NetworkProtocol::BuildLoginRequest(nickname, password));
 }
 
@@ -324,7 +324,7 @@ void NetworkClient::SendInput(uint32_t buttons, float thrust, float turn)
 	input.thrust = thrust;
 	input.turn = turn;
 
-	SendMessage(NetworkProtocol::MessageType::PlayerInput,
+	SendServerMessage(NetworkProtocol::MessageType::PlayerInput,
 		NetworkProtocol::BuildInputState(input));
 }
 
@@ -336,7 +336,7 @@ void NetworkClient::SendChat(const std::string &text)
 	NetworkProtocol::ChatMessage message;
 	NetworkProtocol::WriteFixedString(message.text, sizeof(message.text), text);
 
-	SendMessage(NetworkProtocol::MessageType::ChatSend,
+	SendServerMessage(NetworkProtocol::MessageType::ChatSend,
 		NetworkProtocol::BuildChatMessage(message));
 }
 
@@ -345,7 +345,7 @@ void NetworkClient::SendShipModel(const std::string &model)
 	if(!connected || socketFd < 0)
 		return;
 
-	SendMessage(NetworkProtocol::MessageType::ShipModel,
+	SendServerMessage(NetworkProtocol::MessageType::ShipModel,
 		NetworkProtocol::BuildShipModel(model));
 }
 
@@ -363,7 +363,7 @@ void NetworkClient::SendShipState(const NetworkShipState &state)
 	std::memcpy(message.system, state.system, sizeof(message.system));
 	message.system[NetworkProtocol::MAX_SYSTEM_LENGTH - 1] = '\0';
 
-	SendMessage(NetworkProtocol::MessageType::ShipState,
+	SendServerMessage(NetworkProtocol::MessageType::ShipState,
 		NetworkProtocol::BuildShipState(message));
 }
 
@@ -374,11 +374,11 @@ void NetworkClient::SendPilotSave(const std::string &text)
 	if(text.size() > NetworkProtocol::MAX_PILOT_SAVE_BYTES)
 		return;
 
-	SendMessage(NetworkProtocol::MessageType::PilotSave,
+	SendServerMessage(NetworkProtocol::MessageType::PilotSave,
 		NetworkProtocol::BuildPilotSaveText(text));
 }
 
-void NetworkClient::SendMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload)
+void NetworkClient::SendServerMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload)
 {
 	const uint32_t messageLength = static_cast<uint32_t>(1 + payload.size());
 	if(messageLength > NetworkProtocol::MAX_MESSAGE_SIZE)

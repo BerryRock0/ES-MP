@@ -25,168 +25,168 @@ namespace
 // + model (32 bytes) + system (32 bytes). All integers are little-endian,
 // matching the rest of NetworkProtocol.
 constexpr size_t SHIP_RECORD_SIZE =
-    sizeof(uint32_t) +                // id
-    sizeof(double) * 5 +              // x, y, velocityX, velocityY, angle
-    sizeof(uint32_t) +                // hull
-    NetworkProtocol::MAX_SHIP_MODEL_LENGTH + // model
-    NetworkProtocol::MAX_SYSTEM_LENGTH;      // system
+	sizeof(uint32_t) +                // id
+	sizeof(double) * 5 +              // x, y, velocityX, velocityY, angle
+	sizeof(uint32_t) +                // hull
+	NetworkProtocol::MAX_SHIP_MODEL_LENGTH + // model
+	NetworkProtocol::MAX_SYSTEM_LENGTH;      // system
 
 // Copy a fixed-size field in and out of the buffer. These are raw byte
 // copies (for the char arrays); all numeric fields go through the explicit
 // little-endian helpers below so the wire format is architecture-independent.
 template <typename T>
 bool ReadBytes(
-    const uint8_t *data,
-    size_t size,
-    size_t &offset,
-    T &value)
+	const uint8_t *data,
+	size_t size,
+	size_t &offset,
+	T &value)
 {
-    if(offset > size || sizeof(T) > size - offset)
-        return false;
+	if(offset > size || sizeof(T) > size - offset)
+		return false;
 
-    std::memcpy(
-        &value,
-        data + offset,
-        sizeof(T));
+	std::memcpy(
+		&value,
+		data + offset,
+		sizeof(T));
 
-    offset += sizeof(T);
-    return true;
+	offset += sizeof(T);
+	return true;
 }
 }
 
 uint32_t NetworkSnapshot::Tick() const
 {
-    return tick;
+	return tick;
 }
 
 const std::vector<NetworkShipState> &
 NetworkSnapshot::Ships() const
 {
-    return ships;
+	return ships;
 }
 
 void NetworkSnapshot::SetTick(uint32_t newTick)
 {
-    tick = newTick;
+	tick = newTick;
 }
 
 void NetworkSnapshot::AddShip(
-    const NetworkShipState &ship)
+	const NetworkShipState &ship)
 {
-    ships.push_back(ship);
+	ships.push_back(ship);
 }
 
 std::vector<uint8_t>
 NetworkSnapshot::Serialize() const
 {
-    std::vector<uint8_t> output;
+	std::vector<uint8_t> output;
 
-    const uint32_t shipCount =
-        static_cast<uint32_t>(ships.size());
+	const uint32_t shipCount =
+		static_cast<uint32_t>(ships.size());
 
-    NetworkProtocol::WriteUint32(output, tick);
-    NetworkProtocol::WriteUint32(output, shipCount);
+	NetworkProtocol::WriteUint32(output, tick);
+	NetworkProtocol::WriteUint32(output, shipCount);
 
-    for(const NetworkShipState &ship : ships)
-    {
-        NetworkProtocol::WriteUint32(output, ship.id);
-        NetworkProtocol::WriteDouble(output, ship.x);
-        NetworkProtocol::WriteDouble(output, ship.y);
-        NetworkProtocol::WriteDouble(output, ship.velocityX);
-        NetworkProtocol::WriteDouble(output, ship.velocityY);
-        NetworkProtocol::WriteDouble(output, ship.angle);
-        // Preserve the bit pattern of the (possibly negative) int hull value.
-        // Since C++20 signed integers are two's complement, this round-trips.
-        NetworkProtocol::WriteUint32(output, static_cast<uint32_t>(ship.hull));
-        NetworkProtocol::WriteBytes(output, ship.model, sizeof(ship.model));
-        NetworkProtocol::WriteBytes(output, ship.system, sizeof(ship.system));
-    }
+	for(const NetworkShipState &ship : ships)
+	{
+		NetworkProtocol::WriteUint32(output, ship.id);
+		NetworkProtocol::WriteDouble(output, ship.x);
+		NetworkProtocol::WriteDouble(output, ship.y);
+		NetworkProtocol::WriteDouble(output, ship.velocityX);
+		NetworkProtocol::WriteDouble(output, ship.velocityY);
+		NetworkProtocol::WriteDouble(output, ship.angle);
+		// Preserve the bit pattern of the (possibly negative) int hull value.
+		// Since C++20 signed integers are two's complement, this round-trips.
+		NetworkProtocol::WriteUint32(output, static_cast<uint32_t>(ship.hull));
+		NetworkProtocol::WriteBytes(output, ship.model, sizeof(ship.model));
+		NetworkProtocol::WriteBytes(output, ship.system, sizeof(ship.system));
+	}
 
-    return output;
+	return output;
 }
 
 bool NetworkSnapshot::Deserialize(
-    const uint8_t *data,
-    size_t size,
-    NetworkSnapshot &snapshot)
+	const uint8_t *data,
+	size_t size,
+	NetworkSnapshot &snapshot)
 {
-    if(!data)
-        return false;
+	if(!data)
+		return false;
 
-    size_t offset = 0;
-    uint32_t newTick = 0;
-    uint32_t shipCount = 0;
+	size_t offset = 0;
+	uint32_t newTick = 0;
+	uint32_t shipCount = 0;
 
-    if(offset > size || sizeof(uint32_t) > size - offset)
-        return false;
-    newTick = NetworkProtocol::ReadUint32(data + offset);
-    offset += sizeof(uint32_t);
+	if(offset > size || sizeof(uint32_t) > size - offset)
+		return false;
+	newTick = NetworkProtocol::ReadUint32(data + offset);
+	offset += sizeof(uint32_t);
 
-    if(offset > size || sizeof(uint32_t) > size - offset)
-        return false;
-    shipCount = NetworkProtocol::ReadUint32(data + offset);
-    offset += sizeof(uint32_t);
+	if(offset > size || sizeof(uint32_t) > size - offset)
+		return false;
+	shipCount = NetworkProtocol::ReadUint32(data + offset);
+	offset += sizeof(uint32_t);
 
-    // Prevent malformed packets from allocating excessive memory. The count
-    // must also be consistent with the number of bytes actually remaining.
-    const size_t remaining = size - offset;
-    if(shipCount > 10000 || shipCount > remaining / SHIP_RECORD_SIZE)
-        return false;
+	// Prevent malformed packets from allocating excessive memory. The count
+	// must also be consistent with the number of bytes actually remaining.
+	const size_t remaining = size - offset;
+	if(shipCount > 10000 || shipCount > remaining / SHIP_RECORD_SIZE)
+		return false;
 
-    NetworkSnapshot result;
-    result.SetTick(newTick);
+	NetworkSnapshot result;
+	result.SetTick(newTick);
 
-    for(uint32_t i = 0; i < shipCount; ++i)
-    {
-        NetworkShipState ship;
+	for(uint32_t i = 0; i < shipCount; ++i)
+	{
+		NetworkShipState ship;
 
-        if(offset > size || sizeof(uint32_t) > size - offset)
-            return false;
-        ship.id = NetworkProtocol::ReadUint32(data + offset);
-        offset += sizeof(uint32_t);
+		if(offset > size || sizeof(uint32_t) > size - offset)
+			return false;
+		ship.id = NetworkProtocol::ReadUint32(data + offset);
+		offset += sizeof(uint32_t);
 
-        if(offset > size || sizeof(double) > size - offset)
-            return false;
-        ship.x = NetworkProtocol::ReadDouble(data + offset);
-        offset += sizeof(double);
+		if(offset > size || sizeof(double) > size - offset)
+			return false;
+		ship.x = NetworkProtocol::ReadDouble(data + offset);
+		offset += sizeof(double);
 
-        if(offset > size || sizeof(double) > size - offset)
-            return false;
-        ship.y = NetworkProtocol::ReadDouble(data + offset);
-        offset += sizeof(double);
+		if(offset > size || sizeof(double) > size - offset)
+			return false;
+		ship.y = NetworkProtocol::ReadDouble(data + offset);
+		offset += sizeof(double);
 
-        if(offset > size || sizeof(double) > size - offset)
-            return false;
-        ship.velocityX = NetworkProtocol::ReadDouble(data + offset);
-        offset += sizeof(double);
+		if(offset > size || sizeof(double) > size - offset)
+			return false;
+		ship.velocityX = NetworkProtocol::ReadDouble(data + offset);
+		offset += sizeof(double);
 
-        if(offset > size || sizeof(double) > size - offset)
-            return false;
-        ship.velocityY = NetworkProtocol::ReadDouble(data + offset);
-        offset += sizeof(double);
+		if(offset > size || sizeof(double) > size - offset)
+			return false;
+		ship.velocityY = NetworkProtocol::ReadDouble(data + offset);
+		offset += sizeof(double);
 
-        if(offset > size || sizeof(double) > size - offset)
-            return false;
-        ship.angle = NetworkProtocol::ReadDouble(data + offset);
-        offset += sizeof(double);
+		if(offset > size || sizeof(double) > size - offset)
+			return false;
+		ship.angle = NetworkProtocol::ReadDouble(data + offset);
+		offset += sizeof(double);
 
-        if(offset > size || sizeof(uint32_t) > size - offset)
-            return false;
-        ship.hull = static_cast<int>(
-            NetworkProtocol::ReadUint32(data + offset));
-        offset += sizeof(uint32_t);
+		if(offset > size || sizeof(uint32_t) > size - offset)
+			return false;
+		ship.hull = static_cast<int>(
+			NetworkProtocol::ReadUint32(data + offset));
+		offset += sizeof(uint32_t);
 
-        if(!ReadBytes(data, size, offset, ship.model))
-            return false;
-        ship.model[NetworkProtocol::MAX_SHIP_MODEL_LENGTH - 1] = '\0';
+		if(!ReadBytes(data, size, offset, ship.model))
+			return false;
+		ship.model[NetworkProtocol::MAX_SHIP_MODEL_LENGTH - 1] = '\0';
 
-        if(!ReadBytes(data, size, offset, ship.system))
-            return false;
-        ship.system[NetworkProtocol::MAX_SYSTEM_LENGTH - 1] = '\0';
+		if(!ReadBytes(data, size, offset, ship.system))
+			return false;
+		ship.system[NetworkProtocol::MAX_SYSTEM_LENGTH - 1] = '\0';
 
-        result.AddShip(ship);
-    }
+		result.AddShip(ship);
+	}
 
-    snapshot = std::move(result);
-    return true;
+	snapshot = std::move(result);
+	return true;
 }
