@@ -150,6 +150,12 @@ add_subdirectory(source)
 add_library(ExternalLibraries INTERFACE)
 target_link_libraries(EndlessSkyLib PUBLIC ExternalLibraries)
 
+# 'min' and 'max' are function-like macros in MSVC's windows.h unless NOMINMAX
+# is defined, which breaks std::numeric_limits<T>::max() and std::max()/min().
+if(WIN32)
+	target_compile_definitions(ExternalLibraries INTERFACE NOMINMAX)
+endif()
+
 # Enable sanitizers on debug builds, depending on platform support.
 if(NOT WIN32 AND NOT CYGWIN)
 	set(SANITIZER_OPTS "-g" "-fsanitize=address,undefined,pointer-compare,pointer-subtract,unreachable,builtin,integer-divide-by-zero,vla-bound,null,return,signed-integer-overflow,bounds,alignment,bool,enum,pointer-overflow")
@@ -307,6 +313,13 @@ if(NOT MSVC)
 endif()
 find_package(Threads REQUIRED)
 target_link_libraries(EndlessSkyServer PRIVATE Threads::Threads)
+
+# The server does not link SDL (whose CMake config provides -DNOMINMAX for the
+# game targets), so define it explicitly or windows.h's min/max macros break
+# std::numeric_limits<T>::max() on MSVC-style compilers.
+if(WIN32)
+	target_compile_definitions(EndlessSkyServer PRIVATE NOMINMAX)
+endif()
 
 # Copy the MinGW runtime DLLs if necessary.
 if(MINGW AND WIN32)
