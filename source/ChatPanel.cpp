@@ -160,7 +160,7 @@ bool ChatPanel::Click(int x, int y, MouseButton button, int clicks)
 				// Attach the shared world to this client's active flight (the
 				// same attach the connect panel performs), so the session's
 				// game model drives the remote ships once it is populated.
-				MainPanel *active = dynamic_cast<MainPanel *>(GetUI().Root().get());
+				MainPanel *active = static_cast<MainPanel *>(GetUI().Root().get());
 				if(active && !active->IsMenuBackdrop())
 				{
 					active->SetGameModel(&session.Game());

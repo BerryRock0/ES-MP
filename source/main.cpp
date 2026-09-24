@@ -366,7 +366,7 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 		// pilot, or a single-player pilot -- is replaced below with a pilot
 		// that comes strictly from the server, so a logged-in player can
 		// never keep another player's save.
-		MainPanel *rootMain = dynamic_cast<MainPanel *>(gamePanels.Root().get());
+		MainPanel *rootMain = static_cast<MainPanel *>(gamePanels.Root().get());
 		if(rootMain && !rootMain->IsMenuBackdrop()
 				&& networkSession.Nickname() == player.NetworkNickname())
 		{

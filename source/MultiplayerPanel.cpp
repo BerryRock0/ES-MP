@@ -855,7 +855,7 @@ void MultiplayerPanel::Connect()
 		// in-game menu.
 		if(gamePanels)
 		{
-			MainPanel *active = dynamic_cast<MainPanel *>(gamePanels->Root().get());
+			MainPanel *active = static_cast<MainPanel *>(gamePanels->Root().get());
 			if(active && !active->IsMenuBackdrop())
 			{
 				active->SetGameModel(&networkSession->Game());
