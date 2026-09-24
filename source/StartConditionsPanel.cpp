@@ -53,8 +53,8 @@ using namespace std;
 
 
 StartConditionsPanel::StartConditionsPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session,
-	const StartConditionsList &allScenarios, const Panel *parent)
-	: player(player), gamePanels(gamePanels), session(session), parent(parent), gamerules(GameData::DefaultGamerules()),
+	const StartConditionsList &allScenarios)
+	: player(player), gamePanels(gamePanels), session(session), gamerules(GameData::DefaultGamerules()),
 	bright(*GameData::Colors().Get("bright")), medium(*GameData::Colors().Get("medium")),
 	selectedBackground(*GameData::Colors().Get("faint"))
 {
@@ -280,9 +280,9 @@ void StartConditionsPanel::OnConversationEnd(int)
 		gamePanels.StepAll();
 	}
 	// Remove the complete menu stack. This is intentionally based on the
-	// lower-most panel rather than `parent`: when the start panel was opened
-	// from LoadPanel, the main menu is still below the parent and must also
-	// be removed or it will cover the newly started game.
+	// lower-most panel: when the start panel was opened from LoadPanel, the
+	// main menu is still below it and must also be removed or it will cover
+	// the newly started game.
 	if(Panel *root = GetUI().Root().get())
 		GetUI().PopThrough(root);
 }

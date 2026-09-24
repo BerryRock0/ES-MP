@@ -40,7 +40,7 @@ class StartConditionsPanel : public Panel {
 	using StartConditionsList = std::vector<StartConditions>;
 public:
 	StartConditionsPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session,
-		const StartConditionsList &allScenarios, const Panel *parent);
+		const StartConditionsList &allScenarios);
 
 	virtual void Draw() override final;
 
@@ -65,8 +65,6 @@ private:
 	UI &gamePanels;
 	// The multiplayer network session, used by the "Connect to Server" button.
 	NetworkSession &session;
-	// The panel to close when a scenario is chosen.
-	const Panel *parent;
 	// The list of starting scenarios to pick from.
 	StartConditionsList scenarios;
 	// The currently selected starting scenario.
