@@ -1,4 +1,18 @@
-// NetworkServer.cpp
+/* NetworkServer.cpp
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "NetworkServer.h"
 
 #include <algorithm>
@@ -14,13 +28,29 @@
 #include <system_error>
 #include <utility>
 
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#ifdef _WIN32
+	#include <winsock2.h>
+	#include <ws2tcpip.h>
+	// Winsock has no SIGPIPE, so a send can never raise it; the flag is 0.
+	#ifndef MSG_NOSIGNAL
+	#define MSG_NOSIGNAL 0
+	#endif
+	// Winsock sockets are closed with closesocket() and shut down with the
+	// SD_* constants instead of SHUT_RDWR.
+	#define SocketClose(fd) closesocket(fd)
+	#ifndef SHUT_RDWR
+	#define SHUT_RDWR SD_BOTH
+	#endif
+#else
+	#include <fcntl.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+	#include <netdb.h>
+	#include <sys/socket.h>
+	#include <netinet/tcp.h>
+	#include <unistd.h>
+	#define SocketClose(fd) close(fd)
+#endif
 
 namespace
 {
@@ -258,17 +288,22 @@ namespace
 	// Set a socket to non-blocking mode. Returns false on failure.
 	bool SetNonBlocking(int fd)
 	{
+#ifdef _WIN32
+		u_long mode = 1;
+		return ioctlsocket(fd, FIONBIO, &mode) == 0;
+#else
 		const int flags = fcntl(fd, F_GETFL, 0);
 		if(flags < 0)
 			return false;
 		return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+#endif
 	}
 
 	// Disable Nagle's algorithm so small input packets go out immediately.
 	void SetNoDelay(int fd)
 	{
 		const int one = 1;
-		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+		setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&one), sizeof(one));
 	}
 }
 
@@ -311,12 +346,12 @@ bool NetworkServer::Start(uint16_t newPort, const std::string &newPassword, cons
 			continue;
 
 		const int one = 1;
-		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+		setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&one), sizeof(one));
 
 		if(bind(fd, entry->ai_addr, entry->ai_addrlen) == 0 && listen(fd, 16) == 0)
 			break;
 
-		close(fd);
+		SocketClose(fd);
 		fd = -1;
 	}
 
@@ -327,7 +362,7 @@ bool NetworkServer::Start(uint16_t newPort, const std::string &newPassword, cons
 
 	if(!SetNonBlocking(fd))
 	{
-		close(fd);
+		SocketClose(fd);
 		return false;
 	}
 
@@ -355,7 +390,7 @@ void NetworkServer::Stop(bool saveWorld)
 		if(client.socketFd >= 0)
 		{
 			shutdown(client.socketFd, SHUT_RDWR);
-			close(client.socketFd);
+			SocketClose(client.socketFd);
 		}
 	}
 	clients.clear();
@@ -365,7 +400,7 @@ void NetworkServer::Stop(bool saveWorld)
 		if(client.socketFd >= 0)
 		{
 			shutdown(client.socketFd, SHUT_RDWR);
-			close(client.socketFd);
+			SocketClose(client.socketFd);
 		}
 	}
 	pending.clear();
@@ -373,7 +408,7 @@ void NetworkServer::Stop(bool saveWorld)
 	if(listenFd >= 0)
 	{
 		shutdown(listenFd, SHUT_RDWR);
-		close(listenFd);
+		SocketClose(listenFd);
 		listenFd = -1;
 	}
 
@@ -436,7 +471,11 @@ void NetworkServer::AcceptNewClients()
 	for(;;)
 	{
 		sockaddr_storage address{};
+#ifdef _WIN32
+		int addressLength = sizeof(address);
+#else
 		socklen_t addressLength = sizeof(address);
+#endif
 
 		const int fd = accept(listenFd, reinterpret_cast<sockaddr *>(&address), &addressLength);
 		if(fd < 0)
@@ -447,7 +486,7 @@ void NetworkServer::AcceptNewClients()
 
 		if(!SetNonBlocking(fd))
 		{
-			close(fd);
+			SocketClose(fd);
 			continue;
 		}
 		SetNoDelay(fd);
@@ -471,7 +510,7 @@ void NetworkServer::ReadFromPending()
 		bool closed = false;
 		for(;;)
 		{
-			const ssize_t received = recv(fd, buffer, sizeof(buffer), 0);
+			const int received = recv(fd, reinterpret_cast<char *>(buffer), sizeof(buffer), 0);
 			if(received > 0)
 			{
 				pending[i].receiveBuffer.insert(pending[i].receiveBuffer.end(), buffer, buffer + received);
@@ -482,9 +521,17 @@ void NetworkServer::ReadFromPending()
 				closed = true;
 				break;
 			}
+			#ifdef _WIN32
+			if(WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 			if(errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
 				break;
+#ifdef _WIN32
+			if(WSAGetLastError() == WSAEINTR)
+#else
 			if(errno == EINTR)
+#endif
 				continue;
 			closed = true;
 			break;
@@ -583,7 +630,7 @@ void NetworkServer::ReadFromClients()
 		bool closed = false;
 		for(;;)
 		{
-			const ssize_t received = recv(fd, buffer, sizeof(buffer), 0);
+			const int received = recv(fd, reinterpret_cast<char *>(buffer), sizeof(buffer), 0);
 			if(received > 0)
 			{
 				client.receiveBuffer.insert(client.receiveBuffer.end(), buffer, buffer + received);
@@ -594,9 +641,17 @@ void NetworkServer::ReadFromClients()
 				closed = true;
 				break;
 			}
+			#ifdef _WIN32
+			if(WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 			if(errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
 				break;
+#ifdef _WIN32
+			if(WSAGetLastError() == WSAEINTR)
+#else
 			if(errno == EINTR)
+#endif
 				continue;
 			closed = true;
 			break;
@@ -686,15 +741,24 @@ void NetworkServer::FlushSend(PendingClient &client)
 
 	while(!client.sendBuffer.empty())
 	{
-		const ssize_t sent = send(client.socketFd, client.sendBuffer.data(), client.sendBuffer.size(), MSG_NOSIGNAL);
+		const int sent = send(client.socketFd,
+			reinterpret_cast<const char *>(client.sendBuffer.data()), client.sendBuffer.size(), MSG_NOSIGNAL);
 		if(sent > 0)
 		{
 			client.sendBuffer.erase(client.sendBuffer.begin(), client.sendBuffer.begin() + sent);
 			continue;
 		}
+		#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 		if(sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+#endif
 			return;
+#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEINTR)
+#else
 		if(sent < 0 && errno == EINTR)
+#endif
 			continue;
 		// Broken connection; the read loop will notice and clean up.
 		return;
@@ -708,21 +772,30 @@ void NetworkServer::FlushSend(Client &client)
 
 	while(!client.sendBuffer.empty())
 	{
-		const ssize_t sent = send(client.socketFd, client.sendBuffer.data(), client.sendBuffer.size(), MSG_NOSIGNAL);
+		const int sent = send(client.socketFd,
+			reinterpret_cast<const char *>(client.sendBuffer.data()), client.sendBuffer.size(), MSG_NOSIGNAL);
 		if(sent > 0)
 		{
 			client.sendBuffer.erase(client.sendBuffer.begin(), client.sendBuffer.begin() + sent);
 			continue;
 		}
+		#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 		if(sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+#endif
 			return;
+#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEINTR)
+#else
 		if(sent < 0 && errno == EINTR)
+#endif
 			continue;
 		return;
 	}
 }
 
-void NetworkServer::DropPending(size_t index, const std::string &reason)
+void NetworkServer::DropPending(size_t index, const std::string &)
 {
 	if(index >= pending.size())
 		return;
@@ -731,11 +804,9 @@ void NetworkServer::DropPending(size_t index, const std::string &reason)
 	if(client.socketFd >= 0)
 	{
 		shutdown(client.socketFd, SHUT_RDWR);
-		close(client.socketFd);
+		SocketClose(client.socketFd);
 	}
 	pending.erase(pending.begin() + index);
-
-	(void)reason;
 }
 
 void NetworkServer::DisconnectClient(size_t index, const std::string &reason)
@@ -753,7 +824,7 @@ void NetworkServer::DisconnectClient(size_t index, const std::string &reason)
 	if(client.socketFd >= 0)
 	{
 		shutdown(client.socketFd, SHUT_RDWR);
-		close(client.socketFd);
+		SocketClose(client.socketFd);
 	}
 	clients.erase(clients.begin() + index);
 }
@@ -1068,11 +1139,10 @@ void NetworkServer::Update(double deltaTime)
 	BroadcastSnapshot();
 }
 
-void NetworkServer::StepWorld(double deltaTime)
+void NetworkServer::StepWorld(double)
 {
 	// Positions are now supplied by the clients themselves (ShipState
 	// messages) and relayed as-is, so the server no longer simulates motion.
-	(void)deltaTime;
 }
 
 void NetworkServer::BroadcastSnapshot()

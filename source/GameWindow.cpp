@@ -14,6 +14,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 */
 
 #include "GameWindow.h"
+
 #include "NetworkSession.h"
 
 #include "Logger.h"

@@ -15,10 +15,10 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
 
-#include "Preferences.h"
 #include "NetworkClient.h"
-#include "NetworkSnapshot.h"
 #include "NetworkSession.h"
+#include "NetworkSnapshot.h"
+#include "Preferences.h"
 
 #include <string>
 

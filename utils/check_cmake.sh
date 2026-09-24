@@ -14,7 +14,7 @@ TESTLIST="${ESTOP}/tests/CMakeLists.txt"
 
 RESULT=0
 
-for FILE in $(find source -type f -name "*.h" -o -name "*.cpp" -not -name main.cpp | sed s,^source/,, | sort)
+for FILE in $(find source -type f -name "*.h" -o -name "*.cpp" -not -name main.cpp -not -name server_main.cpp | sed s,^source/,, | sort)
 do
   # Check if the file is present in the source list.
   if ! grep -Fq "${FILE}" "${LIBLIST}"; then
