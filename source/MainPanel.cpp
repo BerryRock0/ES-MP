@@ -36,6 +36,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "MessageLogPanel.h"
 #include "Messages.h"
 #include "Mission.h"
+#include "MultiplayerPanel.h"
 #include "NetworkSession.h"
 #include "Planet.h"
 #include "PlanetPanel.h"
@@ -249,12 +250,16 @@ void MainPanel::DrawNetworkPlayers()
 
 
 
-// Draw a small "Chat" button in the bottom-right corner of the screen when a
-// network session is available (while connected, or after a disconnect with a
-// remembered server to return to). Clicking it opens the in-game chat overlay.
+// Draw a small "Chat" button in the bottom-right corner of the screen during
+// every flight. While connected (or with a remembered server to return to)
+// clicking it opens the in-game chat overlay; in single-player it opens the
+// multiplayer lobby instead, so the player can connect to a server and chat.
 void MainPanel::DrawChatButton()
 {
-	if(!session || !(session->IsLoggedIn() || session->HasLastServer()))
+	// The in-game main panel always has the live network session attached
+	// (single-player flights included), so the chat button is always visible
+	// during a flight. Only the main menu's backdrop panels have no session.
+	if(!session)
 	{
 		chatButtonRect = Rectangle();
 		return;
@@ -400,12 +405,16 @@ bool MainPanel::Click(int x, int y, MouseButton button, int clicks)
 			return false;
 	}
 
-	// Clicking the "Chat" button in the bottom-right corner opens the in-game
-	// chat overlay (it is only drawn while a network session is connected or
-	// has a server to return to).
+	// Clicking the "Chat" button in the bottom-right corner opens the chat:
+	// the in-game chat overlay while connected (or with a remembered server
+	// to return to), and otherwise the multiplayer lobby, so the player can
+	// connect to a server and chat there.
 	if(chatButtonRect.Contains(Point(x, y)))
 	{
-		GetUI().Push(new ChatPanel(*session));
+		if(session->IsLoggedIn() || session->HasLastServer())
+			GetUI().Push(new ChatPanel(*session));
+		else
+			GetUI().Push(new MultiplayerPanel(*session, GetUI()));
 		return true;
 	}
 
