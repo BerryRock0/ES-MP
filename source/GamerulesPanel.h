@@ -43,6 +43,11 @@ public:
 	template<class T>
 	void SetCallback(T *t, void (T::*fun)());
 
+	// Const member callbacks are useful for persistence guards that only
+	// inspect the object before allowing a write.
+	template<class T>
+	void SetCallback(T *t, void (T::*fun)() const);
+
 	// Draw this panel.
 	virtual void Draw() override;
 
@@ -118,6 +123,14 @@ private:
 
 template<class T>
 void GamerulesPanel::SetCallback(T *t, void (T::*fun)())
+{
+	callback = std::bind(fun, t);
+}
+
+
+
+template<class T>
+void GamerulesPanel::SetCallback(T *t, void (T::*fun)() const)
 {
 	callback = std::bind(fun, t);
 }

@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <limits>
 #include <map>
 #include <stdexcept>
@@ -11,23 +12,30 @@
 #include <utility>
 
 #include <SDL_keycode.h>
-#include "shift.h"
 
 #include "NetworkProtocol.h"
+#include "shift.h"
 #include "NetworkServer.h"
 #include "NetworkSession.h"
+#include "PlayerInfo.h"
+#include "MainPanel.h"
 #include "audio/Audio.h"
 #include "Color.h"
 #include "Command.h"
 #include "DialogPanel.h"
+#include "Files.h"
 #include "text/DisplayText.h"
 #include "shader/FillShader.h"
 #include "text/Font.h"
 #include "text/FontSet.h"
 #include "GameData.h"
+#include "Logger.h"
 #include "Point.h"
 #include "Preferences.h"
 #include "Screen.h"
+#include "StartConditions.h"
+#include "System.h"
+#include "Planet.h"
 #include "image/Sprite.h"
 #include "image/SpriteSet.h"
 #include "shader/SpriteShader.h"
@@ -58,17 +66,24 @@ namespace
 		{SDLK_KP_SPACE, ' '}
 	};
 
-
 	// The height of the input fields, in pixels.
 	constexpr double INPUT_HEIGHT = 20;
 	// The width of the right-hand field (port / password), in pixels.
 	constexpr double PORT_FIELD_WIDTH = 120;
 	// The gap between the two columns of fields, in pixels.
 	constexpr double FIELD_GAP = 10;
+
+	// The in-process host is still a client executable, so keep its server
+	// data in a dedicated subdirectory instead of allowing the normal player
+	// save path (config/saves) to stand in for the shared world.
+	std::filesystem::path ServerDataDirectory()
+	{
+		return Files::Config() / "server";
+	}
 }
 
-HostPanel::HostPanel(NetworkServer &server, NetworkSession &session)
-	: server(&server), session(&session)
+HostPanel::HostPanel(PlayerInfo &player, UI &gamePanels, NetworkServer &server, NetworkSession &session)
+	: player(&player), gamePanels(&gamePanels), server(&server), session(&session)
 {
 	Audio::Pause();
 	SetInterruptible(false);
@@ -81,7 +96,17 @@ HostPanel::HostPanel(NetworkServer &server, NetworkSession &session)
 	text = std::make_shared<TextArea>();
 	text->SetAlignment(Preferences::GetTextAlignment());
 	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
-	text->SetText("Start LAN World");
+	// A host panel can also be opened to inspect/stop a server that was started
+	// by an earlier panel. In that case the server already owns its lifetime and
+	// closing this dialog must not tear it down.
+	if(this->server && this->server->IsRunning())
+	{
+		hosting = true;
+		port = std::to_string(this->server->Port());
+		text->SetText("Hosting LAN World");
+	}
+	else
+		text->SetText("Start LAN World");
 	AddChild(text);
 
 	Resize();
@@ -89,9 +114,11 @@ HostPanel::HostPanel(NetworkServer &server, NetworkSession &session)
 
 HostPanel::~HostPanel()
 {
-	// If the panel is closed while still hosting, tear the server down so we
-	// do not leak the listening socket.
-	if(hosting)
+	// A successful start transfers ownership of the server to the game loop. Do
+	// not stop it just because the setup panel is removed. Panels opened later
+	// to inspect that server do not own it either; only an untransferred, failed
+	// start needs cleanup here.
+	if(hosting && ownsServer && !leaveServerRunning)
 		StopHosting();
 
 	Audio::Resume();
@@ -203,7 +230,7 @@ void HostPanel::Resize()
 	top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 	const int realBottomHeight = bottom->Height() - cancel->Height();
 
 	int height = 10 + textRectSize.Y() + 10 + (realBottomHeight - 10);
@@ -216,7 +243,8 @@ void HostPanel::Resize()
 
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5f);
 	Point textPos(Width() * -.5 + 10, pos.Y() + 20);
-	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height() - ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * !hosting);
+	textRectSize.Y() = (top->Height() + realBottomHeight - 20) + extensionCount * middle->Height()
+		- ((realBottomHeight - 10) + (INPUT_HEIGHT + FIELD_GAP) * !hosting);
 	Rectangle textRect = Rectangle::FromCorner(textPos, textRectSize);
 	text->SetRect(textRect);
 
@@ -228,7 +256,7 @@ void HostPanel::LayoutInputFields()
 	const Sprite *top = SpriteSet::Get(isWide ? "ui/dialog top wide" : "ui/dialog top");
 	const Sprite *middle = SpriteSet::Get(isWide ? "ui/dialog middle wide" : "ui/dialog middle");
 	const Sprite *bottom = SpriteSet::Get(isWide ? "ui/dialog bottom wide" : "ui/dialog bottom");
-	const Sprite *cancel = SpriteSet::Get("ui/connect cancel");
+	const Sprite *cancel = SpriteSet::Get("ui/dialog cancel");
 
 	Point pos(0., (top->Height() + extensionCount * middle->Height() + bottom->Height()) * -.5);
 	Point inputPos = Point(0., -(cancel->Height() + INPUT_HEIGHT)) - pos;
@@ -270,10 +298,11 @@ bool HostPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 			bool valid = false;
 			switch(focusedField)
 			{
-				case Field::ServerName:
-					valid = (std::isalnum(c) || c == '_' || c == '-')
-						&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
-					break;
+case Field::ServerName:
+				// LAN play is trusted; accept any printable character.
+				valid = (c >= ' ' && c <= '~')
+					&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1;
+				break;
 				case Field::Port:
 					valid = std::isdigit(c);
 					break;
@@ -398,7 +427,8 @@ bool HostPanel::TextInput(const std::string &text)
 		switch(focusedField)
 		{
 			case Field::ServerName:
-				if((std::isalnum(character) || character == '_' || character == '-')
+				// LAN play is trusted; accept any printable character.
+				if(character >= ' ' && character <= '\177'
 					&& field->size() < NetworkProtocol::MAX_NAME_LENGTH - 1)
 					field->push_back(static_cast<char>(character));
 				break;
@@ -471,11 +501,56 @@ void HostPanel::StartHosting()
 		return;
 	}
 
+	const bool couldSave = gamePanels && gamePanels->CanSave();
+
+	// The host executable is also a game client, so give the in-process server
+	// its own storage root. It must not fall back to config/saves or
+	// config/pilots: those directories belong exclusively to the local game.
+	const std::filesystem::path serverDataDirectory = ServerDataDirectory();
+	server->SetWorldSaveDirectory(serverDataDirectory.string());
+	server->SetPluginsDirectory((serverDataDirectory / "plugins").string());
+	server->LoadPlugins();
+	const std::string worldLoadError = server->LoadWorld();
+	if(!worldLoadError.empty())
+		Logger::Log("Could not load the host server's saved world: " + worldLoadError,
+			Logger::Level::WARNING);
+
 	if(!server->Start(static_cast<uint16_t>(parsedPort), password, serverName))
 	{
+		server->SetWorldSaveDirectory("");
 		ShowError("Could not start the server (is the port already in use?).");
 		return;
 	}
+	ownsServer = true;
+	if(gamePanels)
+		gamePanels->CanSave(false);
+
+	// The server owns the shared world, not any client's save file. Restore its
+	// own world when one exists; otherwise use the first available start
+	// scenario only as a one-time fallback. The spawn point defaults to the
+	// origin of that start system (this fork does not expose the planet's
+	// position); the server spreads new players around it until they report
+	// their own authoritative positions.
+	if(!server->HasWorld())
+	{
+		NetworkProtocol::WorldInfo world;
+		const auto &options = GameData::StartOptions();
+		for(auto it = options.begin(); it != options.end(); ++it)
+			if(it->Visible())
+			{
+				NetworkProtocol::WriteFixedString(world.system, sizeof(world.system),
+					it->GetSystem().TrueName());
+				NetworkProtocol::WriteFixedString(world.planet, sizeof(world.planet),
+					it->GetPlanet().TrueName());
+				const Date &startDate = it->GetDate();
+				world.day = startDate.Day();
+				world.month = startDate.Month();
+				world.year = startDate.Year();
+				break;
+			}
+		server->SetWorld(world);
+	}
+	const NetworkProtocol::WorldInfo &activeWorld = server->World();
 
 	// Connect the local player to our own server over the loopback interface.
 	// The host is just another client as far as the server is concerned, so
@@ -483,26 +558,75 @@ void HostPanel::StartHosting()
 	if(!session->Connect("127.0.0.1", static_cast<uint16_t>(parsedPort), serverName, password))
 	{
 		server->Stop();
+		ownsServer = false;
+		if(gamePanels)
+			gamePanels->CanSave(couldSave);
 		ShowError("Could not connect to the local server.");
 		return;
 	}
-	
+
+	// The host enters the server's own world just like everyone else: with an
+	// in-memory network pilot built from that world (and never written to
+	// disk), so the shared world never depends on the host's save file. If the
+	// world already holds a stored pilot save for the host's nickname, resume
+	// that progress synchronously -- the loopback login is asynchronous, and
+	// the game must begin immediately.
+	bool entered = false;
+	const std::string storedPilot = server->PilotSaveFor(serverName);
+	if(!storedPilot.empty())
+		entered = player->LoadNetworkPilot(storedPilot);
+	if(!entered)
+		entered = player->StartNetworkGame(activeWorld);
+	if(!entered)
+	{
+		server->Stop();
+		session->Disconnect();
+		ownsServer = false;
+		if(gamePanels)
+			gamePanels->CanSave(couldSave);
+		ShowError("Could not start a network game (no start scenario available).");
+		return;
+	}
+
+	// Remember which nickname this flight was created for, so the loopback
+	// login (which completes asynchronously) recognizes the host's own flight
+	// and does not replace it with a second pilot.
+	player->SetNetworkNickname(serverName);
+
 	hosting = true;
 	activeButton = 1;
-	status.clear();
-	text->SetText("Hosting LAN world");
-	RefreshStatus();
-	Resize();
+
+	// Once the local loopback client is accepted (it happens during
+	// StartHosting above), enter the game as the host of the shared world. The
+	// fresh network pilot gets its own MainPanel; any earlier flight (for
+	// example a loaded single-player pilot) is replaced in memory only.
+	if(session->IsConnected() && player && gamePanels)
+	{
+		gamePanels->Reset();
+		gamePanels->Push(new MainPanel(*player, &session->Game(), session));
+		// It takes one step to figure out the planet panel should be
+		// created, and another step to actually place it.
+		gamePanels->StepAll();
+		gamePanels->StepAll();
+		// The server now belongs to the game loop, not this setup panel. Clear
+		// the complete menu stack, including panels queued during this frame,
+		// so the start/setup screen cannot reappear over the running game.
+		leaveServerRunning = true;
+		GetUI().Reset();
+		return;
+	}
 }
 
 void HostPanel::StopHosting()
 {
 	if(session)
-		session->Disconnect();
+		session->ForgetServer();
 	if(server)
 		server->Stop();
 
 	hosting = false;
+	ownsServer = false;
+	leaveServerRunning = false;
 	activeButton = 1;
 	status.clear();
 	text->SetText("Start LAN World");

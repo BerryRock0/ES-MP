@@ -15,6 +15,7 @@
 class NetworkSession;
 class System;
 class TextArea;
+class UI;
 
 // A dialog box that displays a message to the player. It can also be used as
 // the multiplayer "connect" panel, in which case it shows an address and a
@@ -46,7 +47,7 @@ public:
 
 	// The multiplayer connection panel. It shows an address and port field and
 	// connects to the given session when the player presses "Connect".
-	explicit MultiplayerPanel(NetworkSession &session);
+	explicit MultiplayerPanel(NetworkSession &session, UI &gamePanels);
 
 	// Draw this panel.
 	virtual void Draw() override;
@@ -58,6 +59,9 @@ public:
 
 private:
 	NetworkSession *networkSession = nullptr;
+	// The in-flight single-player UI stack, so the shared world can be
+	// attached to an existing MainPanel when this client connects.
+	UI *gamePanels = nullptr;
 
 	std::string address;
 	std::string port;
@@ -75,6 +79,10 @@ private:
 	Rectangle passwordRect;
 
 	void Connect();
+	// Update the contextual Connect/Disconnect controls in the connection
+	// dialog. The disconnect action is also wired to the optional third button.
+	void UpdateConnectionButtons();
+	bool DisconnectFromServer(const std::string &);
 	void ShowError(const std::string &message);
 	// The field that currently has keyboard focus, or nullptr.
 	std::string *FocusedField();

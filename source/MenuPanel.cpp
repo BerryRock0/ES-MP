@@ -28,6 +28,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "LoadPanel.h"
 #include "Logger.h"
 #include "MainPanel.h"
+#include "Messages.h"
 #include "HostPanel.h"
 #include "MultiplayerPanel.h"
 #include "NetworkServer.h"
@@ -59,6 +60,13 @@ namespace
 	const int SCROLL_MOD = 2;
 	int scrollSpeed = 1;
 	bool showCreditsWarning = true;
+	// A clean, worldless player used only for the main menu's backdrop flight.
+	// When the player leaves a multiplayer session the real pilot stays loaded
+	// (so the menu keeps showing name, credits, and "Save World Locally"), but
+	// the visible flight must not keep rendering the departed server's world.
+	// The backdrop never needs anything but an empty starfield, and nothing
+	// ever writes to this player.
+	PlayerInfo menuBackdropPlayer;
 }
 
 
@@ -92,7 +100,11 @@ MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session
 
 	if(gamePanels.IsEmpty())
 	{
-		gamePanels.Push(new MainPanel(player));
+		// This backdrop flight (the ship shown behind the menu) is not the
+		// player's game; mark it so a multiplayer login knows to replace it.
+		MainPanel *backdrop = new MainPanel(player);
+		backdrop->SetIsMenuBackdrop(true);
+		gamePanels.Push(backdrop);
 		// It takes one step to figure out the planet panel should be created, and
 		// another step to actually place it. So, take two steps to avoid a flicker.
 		gamePanels.StepAll();
@@ -142,6 +154,9 @@ void MenuPanel::Step()
 void MenuPanel::Draw()
 {
 	glClear(GL_COLOR_BUFFER_BIT);
+	// The cleared frame also hides any flight underneath the menu, so neither a
+	// connected server world nor a lingering disconnected one is ever visible
+	// behind the main menu -- the menu always draws over a clean starfield.
 	GameData::Background().Draw(Point());
 
 	Information info;
@@ -176,9 +191,23 @@ void MenuPanel::Draw()
 	}
 	if(player.Pilot() && !player.Pilot()->GetGamerules().LockGamerules())
 		info.SetCondition("gamerules unlocked");
+	if(session.IsNetworkMode())
+		info.SetCondition("server connected");
+	// A network pilot's world lives only in memory (and on the server). Offer
+	// the explicit "keep this world" button whenever one is loaded, including
+	// after the session has dropped, so its progress can be written to the
+	// local saves folder.
+	if(player.IsLoaded() && player.IsNetworkPilot())
+		info.SetCondition("network pilot loaded");
 
 	GameData::Interfaces().Get("menu background")->Draw(info, this);
 	mainMenuUi->Draw(info, this);
+	if(session.IsNetworkMode() && mainMenuUi->GetBox("disconnect").Dimensions())
+	{
+		// Keep the action independent of the interface button's keyboard
+		// shortcut so a mouse click always reaches the session disconnect.
+		AddZone(mainMenuUi->GetBox("disconnect"), [this]() { DisconnectFromServer(); });
+	}
 	GameData::Interfaces().Get("menu player info")->Draw(info, this);
 
 	if(!credits.empty())
@@ -191,12 +220,22 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 {
 	if(player.IsLoaded() && (key == 'e' || command.Has(Command::MENU)))
 	{
-		gamePanels.CanSave(true);
+		// A multiplayer flight may still be attached to a local pilot. Do not
+		// re-enable the normal save path while returning to the menu; the
+		// network session owns the save protection until it is deliberately
+		// disconnected or a local save is loaded.
+		if(!session.IsNetworkMode() && !player.IsNetworkPilot() && !player.IsNetworkAttached())
+			gamePanels.CanSave(true);
 		GetUI().PopThrough(this);
 		return true;
 	}
-	else if(key == 'r' && player.IsLoaded() && player.IsDead())
+	else if(key == 'r' && player.IsLoaded() && player.IsDead() && !session.IsNetworkMode())
 	{
+		// Reloading a local save must not leave a network session attached to
+		// the replacement pilot.
+		if(session.IsNetworkMode() || session.IsConnected() || session.HasLastServer())
+			session.ForgetServer();
+
 		// First, make sure the previous MainPanel has been deleted.
 		gamePanels.Reset();
 		gamePanels.CanSave(true);
@@ -215,9 +254,13 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 	else if(key == 'l' || key == 'm')
 		GetUI().Push(new LoadPanel(player, gamePanels, session));
 	else if(key == 'c')
-		GetUI().Push(new MultiplayerPanel(session));
+		GetUI().Push(new MultiplayerPanel(session, gamePanels));
+	else if(key == 'd' && (session.IsNetworkMode() || session.IsConnected()))
+		DisconnectFromServer();
+	else if(key == 's' && player.IsLoaded() && player.IsNetworkPilot())
+		SaveWorldLocally();
 	else if(key == 'h')
-		GetUI().Push(new HostPanel(server, session));
+		GetUI().Push(new HostPanel(player, gamePanels, server, session));
 	else if(key == 'n' && !player.IsLoaded())
 	{
 		// If no player is loaded, the "Enter Ship" button becomes "New Pilot."
@@ -228,7 +271,7 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 	else if(key == 'g' && player.Pilot() && !player.Pilot()->GetGamerules().LockGamerules())
 	{
 		GamerulesPanel *panel = new GamerulesPanel(player.Pilot()->GetGamerules(), true);
-		panel->SetCallback(player.Pilot().get(), &PilotProfile::Save);
+		panel->SetCallback(&player, &PlayerInfo::SavePilot);
 		GetUI().Push(panel);
 	}
 	else if(key == 'q')
@@ -264,6 +307,75 @@ bool MenuPanel::Click(int x, int y, MouseButton button, int clicks)
 	}
 
 	return false;
+}
+
+
+
+void MenuPanel::DisconnectFromServer()
+{
+	// This action is deliberately unconditional: a stale click zone or a
+	// state transition between drawing and clicking must still tear down the
+	// client rather than leaving the player attached to the server.
+	session.Disconnect();
+	// A hosted LAN server was started by this process; leaving the server must
+	// close it too, or the loaded server keeps running behind the menu.
+	if(server.IsRunning())
+		server.Stop();
+	ClearNetworkWorld();
+	gamePanels.CanSave(true);
+	Messages::Add({"Disconnected from the server.", GameData::MessageCategories().Get("info")});
+}
+
+
+
+void MenuPanel::SaveWorldLocally()
+{
+	// Ordinary local pilots already save normally; this button is for the
+	// in-memory network pilot whose world would otherwise be lost.
+	if(!player.IsLoaded() || !player.IsNetworkPilot())
+		return;
+
+	if(player.SaveToLocalFolder())
+	{
+		if(session.IsConnected())
+			session.Disconnect();
+		// Leave everything behind: close an in-process hosted server and swap
+		// the visible flight for the clean menu backdrop, so neither the server
+		// nor its world remains on screen behind the menu. The preserved world
+		// is safe in the local save and can be reopened from the pilot load
+		// menu; the pilot itself stays loaded so the menu keeps showing it.
+		if(server.IsRunning())
+			server.Stop();
+		ClearNetworkWorld();
+		gamePanels.CanSave(true);
+		Messages::Add({"World saved to your pilot folder; the server was closed.",
+			GameData::MessageCategories().Get("info")});
+	}
+	else
+		Messages::Add({"Could not save the network world locally.",
+			GameData::MessageCategories().Get("info")});
+	UI::PlaySound(UI::UISound::NORMAL);
+}
+
+
+
+void MenuPanel::ClearNetworkWorld()
+{
+	// The session and any in-process server are already down; only the visible
+	// flight is left. Replace it with the main menu's clean backdrop so nothing
+	// of the departed server's world renders behind or beyond the menu. The
+	// real pilot is deliberately left untouched: it must stay loaded (the menu
+	// keeps showing it, and "Save World Locally" can still preserve its world
+	// after a plain Disconnect).
+	gamePanels.Reset();
+	MainPanel *backdrop = new MainPanel(menuBackdropPlayer);
+	backdrop->SetIsMenuBackdrop(true);
+	gamePanels.Push(backdrop);
+	// It takes one step to figure out the planet panel should be created, and
+	// another step to actually place it. So, take two steps to avoid a flicker.
+	gamePanels.StepAll();
+	gamePanels.StepAll();
+	gamePanels.CanSave(true);
 }
 
 

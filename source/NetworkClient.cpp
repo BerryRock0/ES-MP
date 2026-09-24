@@ -53,6 +53,16 @@ void NetworkClient::SetChatHandler(ChatHandler handler)
 	chatHandler = std::move(handler);
 }
 
+void NetworkClient::SetWorldInfoHandler(WorldInfoHandler handler)
+{
+	worldInfoHandler = std::move(handler);
+}
+
+void NetworkClient::SetSavedPilotHandler(SavedPilotHandler handler)
+{
+	savedPilotHandler = std::move(handler);
+}
+
 void NetworkClient::SetDisconnectHandler(DisconnectHandler handler)
 {
 	disconnectHandler = std::move(handler);
@@ -150,7 +160,16 @@ void NetworkClient::Disconnect()
 {
 	if(socketFd >= 0)
 	{
-		// Best-effort graceful shutdown; ignore errors.
+		// Tell the server why the socket is closing before shutting it down.
+		// This is best effort: a broken connection may reject the write, but a
+		// normal leave should be observed immediately by the server.
+		if(connected)
+		{
+			std::vector<uint8_t> frame;
+			NetworkProtocol::WriteUint32(frame, 1);
+			frame.push_back(static_cast<uint8_t>(NetworkProtocol::MessageType::Disconnect));
+			send(socketFd, frame.data(), frame.size(), MSG_NOSIGNAL);
+		}
 		shutdown(socketFd, SHUT_RDWR);
 		close(socketFd);
 		socketFd = -1;
@@ -267,6 +286,44 @@ void NetworkClient::SendChat(const std::string &text)
 		NetworkProtocol::BuildChatMessage(message));
 }
 
+void NetworkClient::SendShipModel(const std::string &model)
+{
+	if(!connected || socketFd < 0)
+		return;
+
+	SendMessage(NetworkProtocol::MessageType::ShipModel,
+		NetworkProtocol::BuildShipModel(model));
+}
+
+void NetworkClient::SendShipState(const NetworkShipState &state)
+{
+	if(!connected || socketFd < 0)
+		return;
+
+	NetworkProtocol::ShipState message;
+	message.x = state.x;
+	message.y = state.y;
+	message.velocityX = state.velocityX;
+	message.velocityY = state.velocityY;
+	message.angle = state.angle;
+	std::memcpy(message.system, state.system, sizeof(message.system));
+	message.system[NetworkProtocol::MAX_SYSTEM_LENGTH - 1] = '\0';
+
+	SendMessage(NetworkProtocol::MessageType::ShipState,
+		NetworkProtocol::BuildShipState(message));
+}
+
+void NetworkClient::SendPilotSave(const std::string &text)
+{
+	if(!connected || socketFd < 0 || text.empty())
+		return;
+	if(text.size() > NetworkProtocol::MAX_PILOT_SAVE_BYTES)
+		return;
+
+	SendMessage(NetworkProtocol::MessageType::PilotSave,
+		NetworkProtocol::BuildPilotSaveText(text));
+}
+
 void NetworkClient::SendMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload)
 {
 	const uint32_t messageLength = static_cast<uint32_t>(1 + payload.size());
@@ -327,6 +384,10 @@ void NetworkClient::HandlePacket(NetworkProtocol::MessageType type, const uint8_
 	{
 		case NetworkProtocol::MessageType::LoginAccepted:
 		{
+			// Login is a terminal handshake. Ignore duplicate or contradictory
+			// responses after the first successful result.
+			if(loggedIn)
+				break;
 			NetworkProtocol::LoginResponse response;
 			if(NetworkProtocol::ParseLoginResponse(payload, size, response))
 			{
@@ -339,6 +400,10 @@ void NetworkClient::HandlePacket(NetworkProtocol::MessageType type, const uint8_
 		}
 		case NetworkProtocol::MessageType::LoginRejected:
 		{
+			// Never let a late rejection undo an already accepted login and
+			// re-enable local persistence.
+			if(loggedIn)
+				break;
 			NetworkProtocol::LoginResponse response;
 			std::string reason = "Login rejected.";
 			if(NetworkProtocol::ParseLoginResponse(payload, size, response))
@@ -363,6 +428,20 @@ void NetworkClient::HandlePacket(NetworkProtocol::MessageType type, const uint8_
 			NetworkProtocol::ChatMessage message;
 			if(NetworkProtocol::ParseChatMessage(payload, size, message) && chatHandler)
 				chatHandler(message);
+			break;
+		}
+		case NetworkProtocol::MessageType::WorldInfo:
+		{
+			NetworkProtocol::WorldInfo world;
+			if(NetworkProtocol::ParseWorldInfo(payload, size, world) && worldInfoHandler)
+				worldInfoHandler(world);
+			break;
+		}
+		case NetworkProtocol::MessageType::SavedPilot:
+		{
+			std::string text;
+			if(NetworkProtocol::ParsePilotSaveText(payload, size, text) && savedPilotHandler)
+				savedPilotHandler(text);
 			break;
 		}
 		case NetworkProtocol::MessageType::ServerShutdown:

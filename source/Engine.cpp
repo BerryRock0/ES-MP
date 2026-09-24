@@ -521,12 +521,17 @@ void Engine::Step(bool isActive)
 
 	// The calculation thread was paused by MainPanel before calling this function, so it is safe to access things.
 	const shared_ptr<Ship> flagship = player.FlagshipPtr();
-	const StellarObject *object = player.GetStellarObject();
+	// The ship's own landing state is authoritative: follow the planet only
+	// while the flagship is actually staged there. If the player's planet
+	// state lags behind the ship (e.g. after switching ships or in a joined
+	// session), the camera would otherwise stay glued to the landing site.
+	const bool flagshipIsStaged = flagship && flagship->GetPlanet();
+	const StellarObject *object = flagshipIsStaged ? player.GetStellarObject() : nullptr;
 	if(object)
 		camera.SnapTo(object->Position());
 	else if(flagship)
 	{
-		if(isActive && !timePaused)
+		if(!timePaused)
 			camera.MoveTo(flagship->Center(), hyperspacePercentage);
 
 		if(doEnterLabels)
@@ -551,6 +556,28 @@ void Engine::Step(bool isActive)
 	else
 		// If there is no flagship, stop the camera.
 		camera.SnapTo(camera.Center());
+
+	// TEMPORARY DIAGNOSTIC for the "camera glued to the landing spot" report.
+	// Logs which stuck state is actually occurring so the permanent fix can
+	// target it. Fires only after the state persists for several seconds.
+	// Remove once resolved.
+	{
+		static int stalePlanetFrames = 0;
+		static int zoomStuckFrames = 0;
+		bool stalePlanet = flagship && !flagship->GetPlanet()
+				&& flagship->Zoom() >= 1.f && player.GetPlanet();
+		bool zoomStuck = flagship && !flagship->GetPlanet() && flagship->Zoom() < 1.f;
+		stalePlanetFrames = stalePlanet ? stalePlanetFrames + 1 : 0;
+		zoomStuckFrames = zoomStuck ? zoomStuckFrames + 1 : 0;
+		if(stalePlanetFrames == 120)
+			Logger::Log("CAMERA-DIAG: player.planet still set while flagship is flying.",
+				Logger::Level::WARNING);
+		if(zoomStuckFrames == 240)
+			Logger::Log("CAMERA-DIAG: flagship zoom stuck below 1 for several seconds (zoom "
+				+ std::to_string(flagship ? flagship->Zoom() : -1.) + ").",
+				Logger::Level::WARNING);
+	}
+
 	ai.UpdateEvents(events);
 	if(isActive)
 	{
@@ -1198,6 +1225,16 @@ void Engine::GiveCommand(const Command &command)
 	activeCommands.Set(command);
 }
 
+const Point &Engine::CameraCenter() const
+{
+	return camera.Center();
+}
+
+double Engine::GetZoom() const
+{
+	return zoom;
+}
+
 
 
 // Pass the list of game events to MainPanel for handling by the player, and any
@@ -1399,6 +1436,16 @@ void Engine::Draw() const
 
 	// Draw the systems mini-map.
 	minimap.Draw(uiStep);
+
+	// Draw the flagship's coordinates next to the minimap.
+	const Ship *flagship = player.Flagship();
+	if(flagship)
+	{
+		Point coordPos = hud->GetPoint("mini-map") + Point(90., -16.);
+		string coord = to_string(static_cast<int>(flagship->Position().X()));
+		coord += ", " + to_string(static_cast<int>(flagship->Position().Y()));
+		font.Draw(coord, coordPos, Color(.8f, 1.f));
+	}
 
 	// Draw ammo status.
 	double ammoIconWidth = hud->GetValue("ammo icon width");

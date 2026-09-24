@@ -32,6 +32,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Government.h"
 #include "Logger.h"
 #include "Messages.h"
+#include "NetworkProtocol.h"
 #include "Outfit.h"
 #include "Person.h"
 #include "PilotProfile.h"
@@ -69,6 +70,32 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 using namespace std;
 
 namespace {
+	// Only accept ordinary .txt files inside the client's saves directory.
+	// This keeps recent.txt and load callbacks from turning an arbitrary
+	// client-controlled path into a writable server or pilot file.
+	bool IsLocalSavePath(const filesystem::path &path)
+	{
+		if(path.empty() || path.extension() != ".txt")
+			return false;
+		for(const auto &part : path)
+			if(part == "..")
+				return false;
+
+		std::error_code error;
+		if(filesystem::is_symlink(path, error) || error)
+			return false;
+		if(!filesystem::is_regular_file(path, error) || error)
+			return false;
+
+		const filesystem::path saves = filesystem::weakly_canonical(Files::Saves(), error);
+		if(error)
+			return false;
+		const filesystem::path candidate = filesystem::weakly_canonical(path, error);
+		if(error || candidate == saves || !Files::IsParent(saves, candidate))
+			return false;
+		return true;
+	}
+
 	// Move the flagship to the start of your list of ships. It does not make sense
 	// that the flagship would change if you are reunited with a different ship that
 	// was higher up the list.
@@ -252,7 +279,10 @@ void PlayerInfo::Clear()
 // Check if a player has been loaded.
 bool PlayerInfo::IsLoaded() const
 {
-	return !filePath.empty();
+	// A network pilot is a real active game even though it deliberately has no
+	// single-player file path. Treat it as loaded so the main menu can return
+	// to the hosted/client flight.
+	return !filePath.empty() || networkMode || networkPilot || networkAttached;
 }
 
 
@@ -304,14 +334,195 @@ void PlayerInfo::New(const StartConditions &start, const shared_ptr<PilotProfile
 
 
 
+// Begin a fresh, in-memory game for save-free network play, using the first
+// available (visible and unlocked) start scenario. This never touches a save
+// file; the resulting pilot only materialises on disk if the player later
+// chooses to save it.
+bool PlayerInfo::StartNetworkGame()
+{
+	const auto &options = GameData::StartOptions();
+	for(auto it = options.begin(); it != options.end(); ++it)
+		if(it->Visible())
+		{
+			shared_ptr<PilotProfile> pilot = PilotProfile::NewProfile();
+			pilot->New(GameData::DefaultGamerules());
+			New(*it, pilot);
+			networkMode = true;
+			networkPilot = true;
+			return true;
+		}
+	return false;
+}
+
+
+
+void PlayerInfo::SetNetworkMode(bool enabled)
+{
+	networkMode = enabled;
+}
+
+
+
+bool PlayerInfo::IsNetworkMode() const
+{
+	return networkMode;
+}
+
+
+
+bool PlayerInfo::IsNetworkPilot() const
+{
+	return networkPilot;
+}
+
+
+
+void PlayerInfo::SetNetworkAttached(bool enabled)
+{
+	networkAttached = enabled;
+}
+
+
+
+bool PlayerInfo::IsNetworkAttached() const
+{
+	return networkAttached;
+}
+
+
+
+void PlayerInfo::SetNetworkNickname(const std::string &nickname)
+{
+	networkNickname = nickname;
+}
+
+
+
+const std::string &PlayerInfo::NetworkNickname() const
+{
+	return networkNickname;
+}
+
+
+
+// Begin a fresh, in-memory game for save-free network play, but adopt the
+// server's world (start system, planet, date, and spawn point) instead of the
+// first available local start scenario. This never touches a save file; the
+// resulting pilot only materialises on disk if the player later chooses to
+// save it.
+bool PlayerInfo::StartNetworkGame(const NetworkProtocol::WorldInfo &world)
+{
+	if(!StartNetworkGame())
+		return false;
+
+	// Override the pilot's spawn location with the server's world.
+	const std::string systemName = NetworkProtocol::ReadFixedString(world.system, sizeof(world.system));
+	const std::string planetName = NetworkProtocol::ReadFixedString(world.planet, sizeof(world.planet));
+	const System *system = GameData::Systems().Find(systemName);
+	const Planet *planet = GameData::Planets().Find(planetName);
+	if(system && planet)
+	{
+		SetSystem(*system);
+		SetPlanet(planet);
+		for(const shared_ptr<Ship> &ship : ships)
+		{
+			ship->SetSystem(system);
+			ship->SetPlanet(planet);
+			ship->SetPosition(Point(world.spawnX, world.spawnY));
+		}
+	}
+	if(world.day || world.month || world.year)
+	{
+		date = Date(world.day, world.month, world.year);
+		GameData::SetDate(date);
+	}
+	return true;
+}
+
+
+
+// Serialize the whole pilot exactly as a normal pilot save file would be
+// written, but into a string instead of to disk. Network pilots are never
+// saved locally; the text is uploaded to the server so the shared world can
+// persist the player's real progress across restarts.
+string PlayerInfo::SaveToString() const
+{
+	DataWriter out;
+	Save(out);
+	return out.SaveToString();
+}
+
+
+
+// Replace the current player with the state parsed from the text of a pilot
+// save, using the supplied in-memory profile. Unlike Load(), no profile is
+// read from disk, and the result keeps an empty file path so it can never be
+// written out as a single-player save. Returns false for empty or unparseable
+// text.
+bool PlayerInfo::LoadFromText(const string &text, const shared_ptr<PilotProfile> &pilot)
+{
+	if(text.empty())
+		return false;
+
+	// Make sure any previously loaded data is cleared.
+	Clear();
+	this->pilot = pilot;
+
+	std::istringstream in(text);
+	DataFile file(in);
+	// A network pilot may legitimately have an empty name: the multiplayer
+	// start scenario assigns none, so every network save records the pilot
+	// with empty first and last names. A block of text is recognized as a
+	// pilot save by the "pilot" record that Save() always writes, not by a
+	// non-empty name; requiring that record is also what rejects hand-crafted
+	// or corrupted blocks.
+	return LoadFromData(file, "");
+}
+
+
+
+// Resume an in-memory network pilot from the server's stored pilot save. Like
+// StartNetworkGame(), this never touches a local save file and marks the
+// player as a network pilot, so their progress persists only through the
+// server and can never overwrite a single-player save.
+bool PlayerInfo::LoadNetworkPilot(const string &text)
+{
+	shared_ptr<PilotProfile> pilot = PilotProfile::NewProfile();
+	pilot->New(GameData::DefaultGamerules());
+	if(!LoadFromText(text, pilot))
+		return false;
+	networkMode = true;
+	networkPilot = true;
+	return true;
+}
+
+
+
 // Load player information from a saved game file.
 void PlayerInfo::Load(const filesystem::path &path, const shared_ptr<PilotProfile> &pilot)
 {
+	if(!IsLocalSavePath(path))
+	{
+		Clear();
+		return;
+	}
+
 	// Make sure any previously loaded data is cleared.
 	Clear();
 	this->pilot = pilot;
 	this->pilot->Load();
 
+	DataFile file(path);
+	LoadFromData(file, path.string());
+}
+
+
+// The shared parsing body of Load() and LoadFromText(): apply every node of
+// the given DataFile to this player. savePath becomes the player's file path;
+// passing an empty string keeps the result a pure in-memory pilot that cannot
+// be written to disk (which is exactly what a network pilot must be).
+bool PlayerInfo::LoadFromData(DataFile &file, const string &savePath)
+{
 	// A listing of missions and the ships where their cargo or passengers were when the game was saved.
 	// Missions and ships are referred to by string UUIDs.
 	// Any mission cargo or passengers that were in the player's system will not be recorded here,
@@ -319,22 +530,30 @@ void PlayerInfo::Load(const filesystem::path &path, const shared_ptr<PilotProfil
 	map<string, map<string, int>> missionCargoToDistribute;
 	map<string, map<string, int>> missionPassengersToDistribute;
 
-	filePath = path.string();
+	filePath = savePath;
 	// Strip anything after the "~" from snapshots, so that the file we save
-	// will be the auto-save, not the snapshot.
-	size_t pos = filePath.find('~');
-	size_t namePos = filePath.length() - Files::Name(filePath).length();
-	if(pos != string::npos && pos > namePos)
-		filePath = filePath.substr(0, pos) + ".txt";
+	// will be the auto-save, not the snapshot. This only applies to actual
+	// file paths; an in-memory network pilot has no snapshot convention.
+	if(!savePath.empty())
+	{
+		size_t pos = filePath.find('~');
+		size_t namePos = filePath.length() - Files::Name(filePath).length();
+		if(pos != string::npos && pos > namePos)
+			filePath = filePath.substr(0, pos) + ".txt";
+	}
 
 	// The player may have bribed their current planet in the last session. Ensure
 	// we provide the same access to services in this session, too.
 	bool hasFullClearance = false;
 
+	// Whether the block contained the "pilot" record that Save() always
+	// writes. That is the signature of a real pilot save: the pilot's name is
+	// not required, because network pilots legitimately have none.
+	bool sawPilot = false;
+
 	// Register derived conditions now, so old primary versions can load into them.
 	RegisterDerivedConditions();
 
-	DataFile file(path);
 	for(const DataNode &child : file)
 	{
 		const string &key = child.Token(0);
@@ -342,6 +561,7 @@ void PlayerInfo::Load(const filesystem::path &path, const shared_ptr<PilotProfil
 		// Basic player information and persistent UI settings:
 		if(key == "pilot" && child.Size() >= 3)
 		{
+			sawPilot = true;
 			firstName = child.Token(1);
 			lastName = child.Token(2);
 		}
@@ -611,6 +831,8 @@ void PlayerInfo::Load(const filesystem::path &path, const shared_ptr<PilotProfil
 		maxEscortCrew = pilot->GetGamerules().GetDefaultMaxEscortCrew();
 	if(!adminCap.has_value())
 		adminCap = pilot->GetGamerules().GetDefaultAdminCap();
+
+	return sawPilot;
 }
 
 
@@ -633,13 +855,14 @@ bool PlayerInfo::LoadRecent()
 	while(!recentPath.empty() && recentPath.back() <= ' ')
 		recentPath.pop_back();
 
-	if(recentPath.empty() || !Files::Exists(recentPath))
+	const filesystem::path recentSavePath(recentPath);
+	if(recentPath.empty() || !IsLocalSavePath(recentSavePath))
 	{
 		Clear();
 		return false;
 	}
 
-	Load(recentPath, PilotProfile::GetProfile(Files::NameNoExtension(recentPath)));
+	Load(recentSavePath, PilotProfile::GetProfile(Files::NameNoExtension(recentSavePath)));
 	return true;
 }
 
@@ -680,10 +903,68 @@ void PlayerInfo::Save() const
 	Save(filePath);
 
 	// Save pilot data:
-	pilot->Save();
+	SavePilot();
 	// Save global conditions:
 	DataWriter globalConditions(Files::Config() / "global conditions.txt");
 	GameData::GlobalConditions().Save(globalConditions);
+}
+
+
+
+void PlayerInfo::SavePilot() const
+{
+	// Pilot profiles are client-side files too. Do not let a gamerules edit
+	// during multiplayer write one while the rest of the player state is
+	// protected from disk persistence.
+	if(networkMode || networkPilot || networkAttached || !pilot)
+		return;
+	pilot->Save();
+}
+
+
+
+// Convert this in-memory network pilot into an ordinary local pilot and save
+// it to the single-player saves folder. Network pilots are deliberately never
+// written automatically; this explicit action (the menu's "Save World
+// Locally" button) preserves the current world state -- system, planet, date,
+// ships, credits, missions, and conditions -- so it can be continued offline.
+bool PlayerInfo::SaveToLocalFolder()
+{
+	if(!IsLoaded())
+		return false;
+	// A real, non-dead world state is required; dead pilots are never saved.
+	if(isDead || !planet || !system)
+		return false;
+
+	// Server-started pilots are deliberately nameless (the multiplayer start
+	// scenario assigns none). Give the local copy a name so it appears in the
+	// pilot load menu with a proper save file name: the player's server
+	// nickname, or a generic fallback.
+	if(firstName.empty() && lastName.empty())
+		SetName(networkNickname.empty() ? "Network Pilot" : networkNickname, "");
+
+	if(filePath.empty())
+	{
+		// SetName() only builds the save path for a brand-new name. If this
+		// in-memory pilot carried an original name while still being a
+		// network pilot, derive the path from that original name, the same
+		// way a normal load does.
+		const string &useFirst = originalFirstName.empty() ? firstName : originalFirstName;
+		const string &useLast = originalLastName.empty() ? lastName : originalLastName;
+		string identifier = PilotProfile::GetIdentifier(useFirst + " " + useLast);
+		filePath = (Files::Saves() / (identifier + ".txt")).string();
+		pilot->SetIdentifier(identifier);
+	}
+
+	// The pilot leaves the server for good: drop every network flag so it is
+	// treated as an ordinary local pilot (saveable and autosaveable), then
+	// write the current state out.
+	networkMode = false;
+	networkPilot = false;
+	networkAttached = false;
+	networkNickname.clear();
+	Save();
+	return true;
 }
 
 
@@ -1192,6 +1473,11 @@ const shared_ptr<Ship> &PlayerInfo::FlagshipPtr()
 				continue;
 			if(!it->CanBeFlagship())
 				continue;
+			// A destroyed ship must not be selected as the flagship; otherwise
+			// the camera stays glued to a dead hull on every load (or after a
+			// flagship dies without being removed).
+			if(it->IsDestroyed())
+				continue;
 			const bool sameLocation = !planet || it->GetPlanet() == planet;
 			if(sameLocation || (clearance && !it->GetPlanet() && planet->IsAccessible(it.get())))
 			{
@@ -1319,7 +1605,8 @@ bool PlayerInfo::BuyShip(const Ship *model, const string &name)
 	AddStockShip(model, name);
 
 	accounts.AddCredits(-cost);
-	flagship.reset();
+	// You take off in the ship you just purchased: make it the new flagship.
+	flagship = ships.back();
 
 	depreciation.Buy(*model, day, &stockDepreciation);
 	for(const auto &[outfit, count] : model->Outfits())
@@ -4961,6 +5248,13 @@ void PlayerInfo::Autosave() const
 
 void PlayerInfo::Save(const string &filePath) const
 {
+	// Keep the private path-based helper safe as well: callers should not be
+	// able to bypass CanBeSaved() and overwrite a single-player file while
+	// this pilot belongs to a network game. A network pilot remains marked
+	// even during a deliberate disconnect so it cannot accidentally be saved
+	// between connections.
+	if(networkMode || networkPilot || networkAttached)
+		return;
 	if(transactionSnapshot)
 		transactionSnapshot->SaveToPath(filePath);
 	else
@@ -5563,7 +5857,10 @@ void PlayerInfo::CalculateScanners(const shared_ptr<Ship> &ship)
 // Check that this player's current state can be saved.
 bool PlayerInfo::CanBeSaved() const
 {
-	return (!isDead && planet && system && !filePath.empty());
+	// A network pilot is deliberately ephemeral, including while it is
+	// disconnected and waiting to rejoin. It must never be routed through the
+	// single-player save path.
+	return !networkMode && !networkPilot && !networkAttached && !isDead && planet && system && !filePath.empty();
 }
 
 

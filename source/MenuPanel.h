@@ -48,6 +48,15 @@ protected:
 
 private:
 	void DrawCredits() const;
+	// Disconnect the active multiplayer session from the main menu.
+	void DisconnectFromServer();
+	// Write the loaded network pilot's world into the local saves folder and
+	// leave the server, so the player keeps their progress offline.
+	void SaveWorldLocally();
+	// After leaving the server, replace the active flight with the main menu's
+	// clean backdrop: the in-memory world is unloaded and any in-process server
+	// is closed, so neither the server nor its world remains behind the menu.
+	void ClearNetworkWorld();
 
 
 private:

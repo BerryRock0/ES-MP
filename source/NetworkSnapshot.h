@@ -1,5 +1,7 @@
 #pragma once
 
+#include "NetworkProtocol.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -15,6 +17,11 @@ struct NetworkShipState
     double angle = 0.0;
 
     int hull = 0;
+
+    char model[NetworkProtocol::MAX_SHIP_MODEL_LENGTH] = {};
+    // The system the ship is currently in. Empty until a client reports its
+    // flagship's location for the first time.
+    char system[NetworkProtocol::MAX_SYSTEM_LENGTH] = {};
 };
 
 class NetworkSnapshot

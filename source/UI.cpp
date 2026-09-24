@@ -182,12 +182,34 @@ void UI::Pop(const Panel *panel)
 // Remove the given panel and every panel that is higher in the stack.
 void UI::PopThrough(const Panel *panel)
 {
-	for(auto it = stack.rbegin(); it != stack.rend(); ++it)
-	{
-		toPop.push_back(it->get());
+	// Panels queued with Push() are logically above the current stack. Handle
+	// them as part of the same range so a start/menu panel cannot reappear
+	// after a transition that happened in the same frame.
+	for(auto it = toPush.rbegin(); it != toPush.rend(); ++it)
 		if(it->get() == panel)
-			break;
-	}
+		{
+			for(auto pending = toPush.rbegin(); pending != toPush.rend(); ++pending)
+			{
+				toPop.push_back(pending->get());
+				if(pending->get() == panel)
+					break;
+			}
+			return;
+		}
+
+	for(auto it = stack.rbegin(); it != stack.rend(); ++it)
+		if(it->get() == panel)
+		{
+			for(auto pending = toPush.rbegin(); pending != toPush.rend(); ++pending)
+				toPop.push_back(pending->get());
+			for(auto current = stack.rbegin(); current != stack.rend(); ++current)
+			{
+				toPop.push_back(current->get());
+				if(current->get() == panel)
+					break;
+			}
+			return;
+		}
 }
 
 

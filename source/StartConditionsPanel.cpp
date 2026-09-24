@@ -155,7 +155,7 @@ bool StartConditionsPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &c
 	else if(key == 'g')
 		GetUI().Push(new GamerulesPanel(gamerules, false));
 	else if(key == 'c')
-		GetUI().Push(new MultiplayerPanel(session));
+		GetUI().Push(new MultiplayerPanel(session, gamePanels));
 	else if(!scenarios.empty() && (key == SDLK_UP || key == SDLK_DOWN || key == SDLK_PAGEUP || key == SDLK_PAGEDOWN))
 	{
 		// Move up / down an entry, or a page. If at the bottom / top, wrap around.
@@ -181,6 +181,12 @@ bool StartConditionsPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &c
 	else if(startIt != scenarios.end() && (key == 's' || key == 'n' || key == SDLK_KP_ENTER || key == SDLK_RETURN)
 		&& info.HasCondition("unlocked start"))
 	{
+		// Starting a single-player pilot must not leave an old network session
+		// attached to it. Otherwise the first save could contain mixed local and
+		// multiplayer state.
+		if(session.IsNetworkMode() || session.IsConnected() || session.HasLastServer())
+			session.ForgetServer();
+
 		shared_ptr<PilotProfile> pilot = PilotProfile::NewProfile();
 		pilot->New(gamerules);
 		player.New(*startIt, pilot);
@@ -273,11 +279,12 @@ void StartConditionsPanel::OnConversationEnd(int)
 		gamePanels.Push(new ShipyardPanel(player, shipyardStock));
 		gamePanels.StepAll();
 	}
-	if(parent)
-		GetUI().Pop(parent);
-
-	GetUI().Pop(GetUI().Root().get());
-	GetUI().Pop(this);
+	// Remove the complete menu stack. This is intentionally based on the
+	// lower-most panel rather than `parent`: when the start panel was opened
+	// from LoadPanel, the main menu is still below the parent and must also
+	// be removed or it will cover the newly started game.
+	if(Panel *root = GetUI().Root().get())
+		GetUI().PopThrough(root);
 }
 
 

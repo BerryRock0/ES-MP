@@ -65,6 +65,8 @@ private:
 	bool SnapshotNameFilter(const std::string &name, char ch);
 	void SnapshotCallback(const std::string &name);
 	void WriteSnapshot(const std::filesystem::path &sourceFile, const std::filesystem::path &snapshotName);
+	// Save the selected pilot's profile only for a local game.
+	void SaveSelectedPilot();
 	// Load snapshot callback.
 	void LoadCallback();
 	// Delete callbacks.

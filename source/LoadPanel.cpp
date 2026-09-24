@@ -32,6 +32,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Information.h"
 #include "Interface.h"
 #include "MainPanel.h"
+#include "NetworkSession.h"
 #include "image/MaskManager.h"
 #include "PilotProfile.h"
 #include "PlayerInfo.h"
@@ -91,7 +92,8 @@ LoadPanel::LoadPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session
 	// game is paused and 'dirty', i.e. the "main panel" is not on top, and we
 	// actually were using the loaded save.
 	if(player.GetPlanet() && !player.IsDead() && !gamePanels.IsTop(&*gamePanels.Root())
-			&& gamePanels.CanSave())
+			&& gamePanels.CanSave() && !session.IsNetworkMode()
+			&& !player.IsNetworkPilot() && !player.IsNetworkAttached())
 		player.Save();
 	UpdateLists();
 }
@@ -313,10 +315,12 @@ bool LoadPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 				"Are you sure you want to do that?"));
 		}
 	}
-	else if(key == 'g' && selectedPilot && !selectedPilot->GetGamerules().LockGamerules())
+	else if(key == 'g' && selectedPilot && !selectedPilot->GetGamerules().LockGamerules()
+			&& !session.IsNetworkMode() && !player.IsNetworkPilot()
+			&& !player.IsNetworkAttached())
 	{
 		GamerulesPanel *panel = new GamerulesPanel(selectedPilot->GetGamerules(), true);
-		panel->SetCallback(selectedPilot.get(), &PilotProfile::Save);
+		panel->SetCallback(this, &LoadPanel::SaveSelectedPilot);
 		GetUI().Push(panel);
 	}
 	else if(key == 'o')
@@ -504,17 +508,19 @@ void LoadPanel::UpdateLists()
 	PilotProfile::LoadProfiles();
 	pilots = PilotProfile::GetProfileMap();
 
+	// A network pilot has a fresh profile with no files yet. Do not treat that
+	// empty profile as a selectable saved game.
+	if(selectedPilot && selectedPilot->Files().empty())
+		selectedPilot.reset();
+
 	if(!pilots.empty())
 	{
 		if(!selectedPilot)
 			selectedPilot = pilots.begin()->second;
-		if(selectedFile.empty())
+		if(selectedFile.empty() && selectedPilot && !selectedPilot->Files().empty())
 		{
-			if(selectedPilot)
-			{
-				selectedFile = selectedPilot->Files().front().first;
-				loadedInfo.Load(Files::Saves() / selectedFile);
-			}
+			selectedFile = selectedPilot->Files().front().first;
+			loadedInfo.Load(Files::Saves() / selectedFile);
 		}
 	}
 }
@@ -584,9 +590,27 @@ void LoadPanel::WriteSnapshot(const filesystem::path &sourceFile, const filesyst
 
 
 
+// Save the selected pilot's profile only for a local game.
+void LoadPanel::SaveSelectedPilot()
+{
+	if(session.IsNetworkMode() || session.IsConnected()
+			|| player.IsNetworkPilot() || player.IsNetworkAttached())
+		return;
+	if(selectedPilot)
+		selectedPilot->Save();
+}
+
+
+
 // Load snapshot callback.
 void LoadPanel::LoadCallback()
 {
+	// Loading a local save starts a new single-player context. Leave any
+	// remembered multiplayer session first so its network state cannot be
+	// written into the save that is about to be loaded.
+	if(session.IsNetworkMode() || session.IsConnected() || session.HasLastServer())
+		session.ForgetServer();
+
 	// First, make sure the previous MainPanel has been deleted, so
 	// its background thread is no longer running.
 	gamePanels.Reset();
