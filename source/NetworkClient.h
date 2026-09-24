@@ -101,8 +101,9 @@ public:
 
 private:
 	void HandlePacket(NetworkProtocol::MessageType type, const uint8_t *payload, size_t size);
-	// Queue a framed message for sending.
-	void SendMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload);
+	// Queue a framed message for sending. (Named SendServerMessage rather
+	// than SendMessage because the latter is a windows.h macro.)
+	void SendServerMessage(NetworkProtocol::MessageType type, const std::vector<uint8_t> &payload);
 	// Try to write any queued outgoing bytes to the socket.
 	void FlushSend();
 	// Tear down the connection and notify the disconnect handler.
