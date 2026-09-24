@@ -93,7 +93,8 @@ using namespace std;
 
 void PrintHelp();
 void PrintVersion();
-void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRun, bool debugMode);
+void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRun,
+	bool debugMode);
 Conversation LoadConversation(const PlayerInfo &player);
 void PrintTestsTable();
 
@@ -297,7 +298,8 @@ int main(int argc, char *argv[])
 
 
 
-void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRunName, bool debugMode)
+void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversation, const string &testToRunName,
+	bool debugMode)
 {
 	// gamePanels is used for the main panel where you fly your spaceship.
 	// All other game content related dialogs are placed on top of the gamePanels.
@@ -451,7 +453,8 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 
 	const bool isHeadless = (testContext.CurrentTest() && !debugMode);
 
-	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &networkSession, &networkServer, &cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
+	auto ProcessEvents = [&menuPanels, &gamePanels, &player, &networkSession, &networkServer,
+		&cursorTime, &toggleTimeout, &debugMode, &isDebugPaused, &isFastForward]
 	{
 		const Preferences::FastForwardCapsLockSync fastforwardCapsLockSync = Preferences::GetFastForwardCapsLockSync();
 		const bool fastForwardSyncToCapsLock = fastforwardCapsLockSync == Preferences::FastForwardCapsLockSync::ALWAYS

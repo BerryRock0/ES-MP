@@ -1,4 +1,23 @@
-//MultiplayerPanel.h
+/* MultiplayerPanel.h
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
+// MultiplayerPanel.h
+//
+// A dialog box that displays a message to the player. It can also be used as
+// the multiplayer "connect" panel, in which case it shows an address and a
+// port field and connects to a server when the player presses "Connect".
 #pragma once
 
 #include "Panel.h"
@@ -30,7 +49,8 @@ public:
 		~FunctionButton() = default;
 
 		template<class T>
-		FunctionButton(T *panel, const std::string &buttonLabel, SDL_Keycode buttonKey = '\0', bool (T::*buttonAction)(const std::string&) = nullptr);
+		FunctionButton(T *panel, const std::string &buttonLabel, SDL_Keycode buttonKey = '\0',
+			bool (T::*buttonAction)(const std::string&) = nullptr);
 
 		public:
 			std::string buttonLabel;
@@ -217,11 +237,15 @@ protected:
 
 
 template<class T>
-MultiplayerPanel::FunctionButton::FunctionButton(T *panel, const std::string &buttonLabel, SDL_Keycode buttonKey, bool(T::*buttonAction)(const std::string &)) : buttonLabel(buttonLabel), buttonKey(buttonKey), buttonAction(std::bind(buttonAction, panel, std::placeholders::_1))
+MultiplayerPanel::FunctionButton::FunctionButton(T *panel, const std::string &buttonLabel, SDL_Keycode buttonKey,
+	bool(T::*buttonAction)(const std::string &))
+	: buttonLabel(buttonLabel), buttonKey(buttonKey),
+		buttonAction(std::bind(buttonAction, panel, std::placeholders::_1))
 {}
 
 template<class T>
-MultiplayerPanel *MultiplayerPanel::CallFunctionOnExit(T *t, void (T::*fun)(bool), std::string message, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::CallFunctionOnExit(T *t, void (T::*fun)(bool), std::string message,
+	Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
@@ -232,7 +256,8 @@ MultiplayerPanel *MultiplayerPanel::CallFunctionOnExit(T *t, void (T::*fun)(bool
 }
 
 template<class T>
-MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(T *t, void (T::*fun)(), std::string message, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(T *t, void (T::*fun)(), std::string message, Truncate truncate,
+	bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
@@ -243,7 +268,8 @@ MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(T *t, void (T::*fun)(), std
 }
 
 template<class T>
-MultiplayerPanel *MultiplayerPanel::RequestString(T *t, void (T::*fun)(const std::string &), std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::RequestString(T *t, void (T::*fun)(const std::string &), std::string message,
+	std::string initialValue, Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
@@ -255,7 +281,9 @@ MultiplayerPanel *MultiplayerPanel::RequestString(T *t, void (T::*fun)(const std
 }
 
 template<class T>
-MultiplayerPanel *MultiplayerPanel::RequestStringWithValidation(T *t, void (T::*fun)(const std::string &), std::function<bool(const std::string &)> validate, std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::RequestStringWithValidation(T *t, void (T::*fun)(const std::string &),
+	std::function<bool(const std::string &)> validate, std::string message, std::string initialValue,
+	Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);
@@ -268,7 +296,9 @@ MultiplayerPanel *MultiplayerPanel::RequestStringWithValidation(T *t, void (T::*
 }
 
 template<class T>
-MultiplayerPanel *MultiplayerPanel::RequestStringWithCharFilter(T *t, void (T::*fun)(const std::string &), std::function<bool(const std::string &, char)> filter, std::string message, std::string initialValue, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::RequestStringWithCharFilter(T *t, void (T::*fun)(const std::string &),
+	std::function<bool(const std::string &, char)> filter, std::string message, std::string initialValue,
+	Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.message = std::move(message);

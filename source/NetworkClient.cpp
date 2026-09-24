@@ -1,18 +1,48 @@
-// NetworkClient.cpp
+/* NetworkClient.cpp
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "NetworkClient.h"
 
 #include <cerrno>
 #include <cstring>
 #include <utility>
 
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
-#include <sys/select.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#ifdef _WIN32
+	#include <winsock2.h>
+	#include <ws2tcpip.h>
+	// Winsock has no SIGPIPE, so a send can never raise it; the flag is 0.
+	#ifndef MSG_NOSIGNAL
+	#define MSG_NOSIGNAL 0
+	#endif
+	// Winsock sockets are closed with closesocket() and shut down with the
+	// SD_* constants instead of SHUT_RDWR.
+	#define SocketClose(fd) closesocket(fd)
+	#ifndef SHUT_RDWR
+	#define SHUT_RDWR SD_BOTH
+	#endif
+#else
+	#include <fcntl.h>
+	#include <netinet/in.h>
+	#include <arpa/inet.h>
+	#include <netdb.h>
+	#include <sys/select.h>
+	#include <sys/socket.h>
+	#include <netinet/tcp.h>
+	#include <unistd.h>
+	#define SocketClose(fd) close(fd)
+#endif
 
 namespace
 {
@@ -22,10 +52,15 @@ namespace
 	// Set a socket to non-blocking mode. Returns false on failure.
 	bool SetNonBlocking(int fd)
 	{
+#ifdef _WIN32
+		u_long mode = 1;
+		return ioctlsocket(fd, FIONBIO, &mode) == 0;
+#else
 		const int flags = fcntl(fd, F_GETFL, 0);
 		if(flags < 0)
 			return false;
 		return fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+#endif
 	}
 }
 
@@ -95,7 +130,7 @@ bool NetworkClient::Connect(const std::string &host, uint16_t port)
 
 		if(!SetNonBlocking(fd))
 		{
-			close(fd);
+			SocketClose(fd);
 			fd = -1;
 			continue;
 		}
@@ -104,7 +139,13 @@ bool NetworkClient::Connect(const std::string &host, uint16_t port)
 		if(result == 0)
 			break;
 
+		#ifdef _WIN32
+		// A non-blocking connect on winsock reports WSAEWOULDBLOCK instead of
+		// errno EINPROGRESS.
+		if(WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 		if(errno == EINPROGRESS)
+#endif
 		{
 			// Wait for the connection to complete (or fail) with a timeout.
 			fd_set writeSet;
@@ -119,13 +160,18 @@ bool NetworkClient::Connect(const std::string &host, uint16_t port)
 			if(selected > 0)
 			{
 				int socketError = 0;
+#ifdef _WIN32
+				int length = sizeof(socketError);
+#else
 				socklen_t length = sizeof(socketError);
-				if(getsockopt(fd, SOL_SOCKET, SO_ERROR, &socketError, &length) == 0 && socketError == 0)
+#endif
+				if(getsockopt(fd, SOL_SOCKET, SO_ERROR, reinterpret_cast<char *>(&socketError), &length) == 0
+					&& socketError == 0)
 					break; // Connected.
 			}
 		}
 
-		close(fd);
+		SocketClose(fd);
 		fd = -1;
 	}
 
@@ -136,7 +182,7 @@ bool NetworkClient::Connect(const std::string &host, uint16_t port)
 
 	// Disable Nagle's algorithm so input packets are sent immediately.
 	const int one = 1;
-	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
+	setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char *>(&one), sizeof(one));
 
 	socketFd = fd;
 	connected = true;
@@ -168,10 +214,10 @@ void NetworkClient::Disconnect()
 			std::vector<uint8_t> frame;
 			NetworkProtocol::WriteUint32(frame, 1);
 			frame.push_back(static_cast<uint8_t>(NetworkProtocol::MessageType::Disconnect));
-			send(socketFd, frame.data(), frame.size(), MSG_NOSIGNAL);
+			send(socketFd, reinterpret_cast<const char *>(frame.data()), frame.size(), MSG_NOSIGNAL);
 		}
 		shutdown(socketFd, SHUT_RDWR);
-		close(socketFd);
+		SocketClose(socketFd);
 		socketFd = -1;
 	}
 
@@ -200,7 +246,7 @@ void NetworkClient::Poll()
 	uint8_t buffer[4096];
 	for(;;)
 	{
-		const ssize_t received = recv(socketFd, buffer, sizeof(buffer), 0);
+		const int received = recv(socketFd, reinterpret_cast<char *>(buffer), sizeof(buffer), 0);
 		if(received > 0)
 		{
 			receiveBuffer.insert(receiveBuffer.end(), buffer, buffer + received);
@@ -215,10 +261,18 @@ void NetworkClient::Poll()
 		}
 
 		// received < 0
+#ifdef _WIN32
+		if(WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 		if(errno == EAGAIN || errno == EWOULDBLOCK)
+#endif
 			break; // No more data available right now.
 
+#ifdef _WIN32
+		if(WSAGetLastError() == WSAEINTR)
+#else
 		if(errno == EINTR)
+#endif
 			continue;
 
 		// Any other error means the connection is broken.
@@ -344,17 +398,25 @@ void NetworkClient::FlushSend()
 
 	while(!sendBuffer.empty())
 	{
-		const ssize_t sent = send(socketFd, sendBuffer.data(), sendBuffer.size(), MSG_NOSIGNAL);
+		const int sent = send(socketFd, reinterpret_cast<const char *>(sendBuffer.data()), sendBuffer.size(), MSG_NOSIGNAL);
 		if(sent > 0)
 		{
 			sendBuffer.erase(sendBuffer.begin(), sendBuffer.begin() + sent);
 			continue;
 		}
 
+#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEWOULDBLOCK)
+#else
 		if(sent < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+#endif
 			return; // Socket buffer is full; try again next Poll().
 
+#ifdef _WIN32
+		if(sent < 0 && WSAGetLastError() == WSAEINTR)
+#else
 		if(sent < 0 && errno == EINTR)
+#endif
 			continue;
 
 		// The connection is broken.

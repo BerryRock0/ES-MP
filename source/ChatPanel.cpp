@@ -1,4 +1,18 @@
-/* ChatPanel.cpp */
+/* ChatPanel.cpp
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "ChatPanel.h"
 
 #include <cstddef>
@@ -81,7 +95,8 @@ void ChatPanel::Draw()
 	// One row for the button, MAX_LINES for the chat history, and one row for
 	// the input line.
 	const double boxHeight = (MAX_LINES + 2) * lineHeight + 2. * BOX_PADDING;
-	const Point boxCenter(Screen::Width() * .5 - BOX_MARGIN - BOX_WIDTH * .5, Screen::Height() - BOX_MARGIN - boxHeight * .5);
+	const Point boxCenter(Screen::Width() * .5 - BOX_MARGIN - BOX_WIDTH * .5,
+		Screen::Height() - BOX_MARGIN - boxHeight * .5);
 	FillShader::Fill(boxCenter, Point(BOX_WIDTH, boxHeight), back);
 
 	// The button, top-right inside the box. It only exists when there is

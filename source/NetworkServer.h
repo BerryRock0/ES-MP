@@ -1,3 +1,18 @@
+/* NetworkServer.h
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 // NetworkServer.h
 //
 // A small, authoritative LAN game server for Endless Sky multiplayer. It is
@@ -161,7 +176,7 @@ private:
 	void ReadFromClients();
 	void FlushSend(PendingClient &client);
 	void FlushSend(Client &client);
-	void DropPending(size_t index, const std::string &reason);
+	void DropPending(size_t index, const std::string &);
 	void DisconnectClient(size_t index, const std::string &reason);
 
 	// --- Message handling ---
@@ -179,7 +194,7 @@ private:
 		const std::vector<uint8_t> &payload);
 
 	// --- World ---
-	void StepWorld(double deltaTime);
+	void StepWorld(double);
 	void BroadcastSnapshot();
 	void SpawnShip(Client &client);
 	// Return model as-is when the server does not enforce ships or knows the

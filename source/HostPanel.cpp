@@ -1,4 +1,18 @@
-// HostPanel.cpp
+/* HostPanel.cpp
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "HostPanel.h"
 
 #include <cctype>
@@ -13,32 +27,32 @@
 
 #include <SDL_keycode.h>
 
-#include "NetworkProtocol.h"
-#include "shift.h"
-#include "NetworkServer.h"
-#include "NetworkSession.h"
-#include "PlayerInfo.h"
-#include "MainPanel.h"
 #include "audio/Audio.h"
 #include "Color.h"
 #include "Command.h"
 #include "DialogPanel.h"
-#include "Files.h"
 #include "text/DisplayText.h"
+#include "Files.h"
 #include "shader/FillShader.h"
 #include "text/Font.h"
 #include "text/FontSet.h"
 #include "GameData.h"
 #include "Logger.h"
+#include "MainPanel.h"
+#include "NetworkProtocol.h"
+#include "NetworkServer.h"
+#include "NetworkSession.h"
+#include "Planet.h"
+#include "PlayerInfo.h"
 #include "Point.h"
 #include "Preferences.h"
 #include "Screen.h"
-#include "StartConditions.h"
-#include "System.h"
-#include "Planet.h"
+#include "shift.h"
 #include "image/Sprite.h"
 #include "image/SpriteSet.h"
 #include "shader/SpriteShader.h"
+#include "StartConditions.h"
+#include "System.h"
 #include "TextArea.h"
 #include "UI.h"
 
@@ -326,9 +340,15 @@ case Field::ServerName:
 		{
 			switch(focusedField)
 			{
-				case Field::ServerName: focusedField = Field::Port; break;
-				case Field::Port: focusedField = Field::Password; break;
-				case Field::Password: focusedField = Field::ServerName; break;
+				case Field::ServerName:
+					focusedField = Field::Port;
+					break;
+				case Field::Port:
+					focusedField = Field::Password;
+					break;
+				case Field::Password:
+					focusedField = Field::ServerName;
+					break;
 			}
 			return true;
 		}
@@ -482,8 +502,7 @@ void HostPanel::StartHosting()
 	}
 
 	unsigned long parsedPort = 0;
-	try
-	{
+	try {
 		std::size_t charactersRead = 0;
 		parsedPort = std::stoul(port, &charactersRead);
 		if(charactersRead != port.size())

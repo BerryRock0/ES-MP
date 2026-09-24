@@ -1,4 +1,18 @@
-//MultiplayerPanel.cpp
+/* MultiplayerPanel.cpp
+Copyright (c) 2026 by BerryRock0
+
+Endless Sky is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later version.
+
+Endless Sky is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+*/
+
 #include "MultiplayerPanel.h"
 
 #include <cctype>
@@ -12,8 +26,6 @@
 
 #include <SDL_keycode.h>
 
-#include "NetworkProtocol.h"
-#include "NetworkSession.h"
 #include "audio/Audio.h"
 #include "text/Clipboard.h"
 #include "Color.h"
@@ -25,6 +37,8 @@
 #include "GameData.h"
 #include "MainPanel.h"
 #include "Messages.h"
+#include "NetworkProtocol.h"
+#include "NetworkSession.h"
 #include "Point.h"
 #include "Preferences.h"
 #include "Screen.h"
@@ -82,7 +96,8 @@ MultiplayerPanel *MultiplayerPanel::Info(std::string message, Truncate truncate,
 	return new MultiplayerPanel(init);
 }
 
-MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(std::function<void()> okFunction, std::string message, int activeButton, Truncate truncate, bool allowsFastForward)
+MultiplayerPanel *MultiplayerPanel::CallFunctionIfOk(std::function<void()> okFunction, std::string message,
+	int activeButton, Truncate truncate, bool allowsFastForward)
 {
 	MultiplayerInit init;
 	init.voidFun = std::move(okFunction);
@@ -450,10 +465,18 @@ bool MultiplayerPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &comma
 			// Cycle through the fields: nickname -> password -> address -> port.
 			switch(focusedField)
 			{
-				case Field::Nickname: focusedField = Field::Password; break;
-				case Field::Password: focusedField = Field::Address; break;
-				case Field::Address: focusedField = Field::Port; break;
-				case Field::Port: focusedField = Field::Nickname; break;
+				case Field::Nickname:
+					focusedField = Field::Password;
+					break;
+				case Field::Password:
+					focusedField = Field::Address;
+					break;
+				case Field::Address:
+					focusedField = Field::Port;
+					break;
+				case Field::Port:
+					focusedField = Field::Nickname;
+					break;
 			}
 			return true;
 		}
@@ -817,8 +840,7 @@ void MultiplayerPanel::Connect()
 
 	unsigned long parsedPort = 0;
 
-	try
-	{
+	try {
 		std::size_t charactersRead = 0;
 		parsedPort = std::stoul(port, &charactersRead);
 
