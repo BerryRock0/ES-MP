@@ -20,8 +20,10 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "comparators/ByGivenOrder.h"
 #include "CategoryList.h"
 #include "ChatPanel.h"
+#include "Color.h"
 #include "CoreStartData.h"
 #include "DialogPanel.h"
+#include "shader/FillShader.h"
 #include "text/Font.h"
 #include "text/FontSet.h"
 #include "text/Format.h"
@@ -172,6 +174,7 @@ void MainPanel::Draw()
 	}
 
 	DrawNetworkPlayers();
+	DrawChatButton();
 }
 
 
@@ -242,6 +245,34 @@ void MainPanel::DrawNetworkPlayers()
 			font.Draw(label, screenPos + Point(font.Width(label) * -.5, radius + 6. * zoom), dim);
 		}
 	}
+}
+
+
+
+// Draw a small "Chat" button in the bottom-right corner of the screen when a
+// network session is available (while connected, or after a disconnect with a
+// remembered server to return to). Clicking it opens the in-game chat overlay.
+void MainPanel::DrawChatButton()
+{
+	if(!session || !(session->IsLoggedIn() || session->HasLastServer()))
+	{
+		chatButtonRect = Rectangle();
+		return;
+	}
+
+	const Font &font = FontSet::Get(Preferences::GetFontSize());
+	const Color &bright = *GameData::Colors().Get("bright");
+	const Color &dim = *GameData::Colors().Get("medium");
+
+	const std::string label = "Chat";
+	const double padding = 6.;
+	const double margin = 16.;
+	const double buttonWidth = font.Width(label) + 2. * padding;
+	const double buttonHeight = font.Height() + 2. * padding;
+	const Point center = Screen::BottomRight() - Point(margin + buttonWidth * .5, margin + buttonHeight * .5);
+	chatButtonRect = Rectangle(center, Point(buttonWidth, buttonHeight));
+	FillShader::Fill(center, Point(buttonWidth, buttonHeight), dim);
+	font.Draw(label, center - Point(font.Width(label) * .5, font.Height() * .5), bright);
 }
 
 
@@ -367,6 +398,15 @@ bool MainPanel::Click(int x, int y, MouseButton button, int clicks)
 			break;
 		default:
 			return false;
+	}
+
+	// Clicking the "Chat" button in the bottom-right corner opens the in-game
+	// chat overlay (it is only drawn while a network session is connected or
+	// has a server to return to).
+	if(chatButtonRect.Contains(Point(x, y)))
+	{
+		GetUI().Push(new ChatPanel(*session));
+		return true;
 	}
 
 	// Don't respond to clicks if another panel is active.
