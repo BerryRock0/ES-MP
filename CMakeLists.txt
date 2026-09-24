@@ -150,6 +150,14 @@ add_subdirectory(source)
 add_library(ExternalLibraries INTERFACE)
 target_link_libraries(EndlessSkyLib PUBLIC ExternalLibraries)
 
+# 'min' and 'max' are function-like macros in MSVC's windows.h unless NOMINMAX
+# is defined, which breaks std::numeric_limits<T>::max() and std::max()/min().
+# ws2_32 provides the Winsock 2 API used by the multiplayer netcode.
+if(WIN32)
+	target_compile_definitions(ExternalLibraries INTERFACE NOMINMAX)
+	target_link_libraries(ExternalLibraries INTERFACE ws2_32)
+endif()
+
 # Enable sanitizers on debug builds, depending on platform support.
 if(NOT WIN32 AND NOT CYGWIN)
 	set(SANITIZER_OPTS "-g" "-fsanitize=address,undefined,pointer-compare,pointer-subtract,unreachable,builtin,integer-divide-by-zero,vla-bound,null,return,signed-integer-overflow,bounds,alignment,bool,enum,pointer-overflow")
@@ -307,6 +315,15 @@ if(NOT MSVC)
 endif()
 find_package(Threads REQUIRED)
 target_link_libraries(EndlessSkyServer PRIVATE Threads::Threads)
+
+# The server does not link SDL (whose CMake config provides -DNOMINMAX and
+# links ws2_32 for the game targets), so provide both explicitly: NOMINMAX or
+# windows.h's min/max macros break std::numeric_limits<T>::max() on MSVC-style
+# compilers, and ws2_32 supplies the Winsock functions the netcode uses.
+if(WIN32)
+	target_compile_definitions(EndlessSkyServer PRIVATE NOMINMAX)
+	target_link_libraries(EndlessSkyServer PRIVATE ws2_32)
+endif()
 
 # Copy the MinGW runtime DLLs if necessary.
 if(MINGW AND WIN32)
