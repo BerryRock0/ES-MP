@@ -16,9 +16,16 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "UI.h"
 
 #include "audio/Audio.h"
+#include "Color.h"
 #include "Command.h"
+#include "text/Font.h"
+#include "text/FontSet.h"
+#include "GameData.h"
+#include "LayoutAssetPickerPanel.h"
+#include "shader/LineShader.h"
 #include "Panel.h"
 #include "Screen.h"
+#include "UILayout.h"
 
 #include <SDL2/SDL.h>
 
@@ -26,12 +33,160 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 using namespace std;
 
+namespace
+{
+	int layoutColorIndex = 0;
+}
+
 
 
 // Handle an event. The event is handed to each panel on the stack until one
 // of them handles it. If none do, this returns false.
 bool UI::Handle(const SDL_Event &event)
 {
+	const Command keyCommand = event.type == SDL_KEYDOWN
+		? Command(event.key.keysym.sym) : Command();
+	const bool assetPickerOpen = LayoutAssetPickerPanel::IsOpen();
+	if(event.type == SDL_WINDOWEVENT
+			&& (event.window.event == SDL_WINDOWEVENT_FOCUS_LOST
+				|| event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED))
+	{
+		UILayout::CancelDrag();
+		UILayout::ClearRegions();
+	}
+	if(!assetPickerOpen && event.type == SDL_KEYDOWN && !event.key.repeat
+			&& event.key.keysym.sym == SDLK_ESCAPE && UILayout::IsEditing())
+	{
+		UILayout::ToggleEditing();
+		UILayout::ClearRegions();
+		PushOrPop();
+		return true;
+	}
+	const bool toggleLayout = !assetPickerOpen && event.type == SDL_KEYDOWN && !event.key.repeat
+		&& (keyCommand.Has(Command::LAYOUT_TOGGLE)
+			|| (event.key.keysym.sym == SDLK_l && (event.key.keysym.mod & KMOD_CTRL)));
+	if(toggleLayout)
+	{
+		UILayout::ToggleEditing();
+		UILayout::ClearRegions();
+		PushOrPop();
+		return true;
+	}
+
+	if(event.type == SDL_MOUSEMOTION && UILayout::IsDragging())
+	{
+		const int buttons = SDL_GetMouseState(nullptr, nullptr);
+		if(!(buttons & SDL_BUTTON(1)) && !(event.motion.state & SDL_BUTTON(1)))
+		{
+			UILayout::CancelDrag();
+			UILayout::ClearRegions();
+		}
+	}
+
+	if(UILayout::IsEditing() && !assetPickerOpen)
+	{
+		auto screenPoint = [](int x, int y) {
+			return Point(Screen::Left() + x * 100 / Screen::Zoom(), Screen::Top() + y * 100 / Screen::Zoom());
+		};
+		if(event.type == SDL_KEYDOWN && !event.key.repeat)
+		{
+			const SDL_Keycode key = event.key.keysym.sym;
+			const Uint16 mod = event.key.keysym.mod;
+			if(keyCommand.Has(Command::LAYOUT_ASSETS))
+			{
+				Push(new LayoutAssetPickerPanel(UI::GetMouse()));
+				PushOrPop();
+				return true;
+			}
+			bool changed = false;
+			if(key == 'z' && (mod & (KMOD_CTRL | KMOD_GUI)))
+				changed = (mod & KMOD_SHIFT) ? UILayout::Redo() : UILayout::Undo();
+			else if(key == 'y' && (mod & (KMOD_CTRL | KMOD_GUI)))
+				changed = UILayout::Redo();
+			else if(key == SDLK_TAB)
+				changed = UILayout::SelectNext(mod & KMOD_SHIFT);
+			else if(keyCommand.Has(Command::LAYOUT_SCALE_UP)
+					|| key == SDLK_PLUS || key == SDLK_KP_PLUS || key == SDLK_EQUALS)
+				changed = UILayout::ScaleSelected(1.1);
+			else if(keyCommand.Has(Command::LAYOUT_SCALE_DOWN)
+					|| key == SDLK_MINUS || key == SDLK_KP_MINUS)
+				changed = UILayout::ScaleSelected(1. / 1.1);
+			else if(keyCommand.Has(Command::LAYOUT_COLOR) || key == 'c')
+			{
+				static const Color colors[] = {
+					Color(1.f, .2f, .2f), Color(.2f, 1.f, .2f), Color(.2f, .4f, 1.f),
+					Color(1.f, .85f, .2f), Color(1.f, 1.f, 1.f)
+				};
+				++layoutColorIndex %= static_cast<int>(sizeof(colors) / sizeof(colors[0]));
+				changed = UILayout::SetSelectedColor(colors[layoutColorIndex]);
+			}
+			else if(keyCommand.Has(Command::LAYOUT_VISIBILITY) || key == 'h')
+				changed = UILayout::ToggleSelectedVisibility();
+			else if(keyCommand.Has(Command::LAYOUT_REMOVE) || key == SDLK_BACKSPACE)
+				changed = UILayout::RemoveSelected();
+			else if(keyCommand.Has(Command::LAYOUT_ADD_TEXT) || key == 'n')
+				changed = UILayout::AddText("Custom text", UI::GetMouse(), Point(240., 30.), Color(1.f)) != 0;
+			else if(keyCommand.Has(Command::LAYOUT_ADD_SPRITE) || key == 'b')
+				changed = UILayout::AddSprite("ui/selected system", UI::GetMouse(), Point(64., 64.), Color(1.f)) != 0;
+			if(changed)
+			{
+				UILayout::ClearRegions();
+				AdjustViewport();
+				PushOrPop();
+				return true;
+			}
+		}
+		if(event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT
+				&& UILayout::BeginDrag(screenPoint(event.button.x, event.button.y)))
+		{
+			AdjustViewport();
+			PushOrPop();
+			return true;
+		}
+		if(event.type == SDL_MOUSEMOTION && ((event.motion.state & SDL_BUTTON(1)) || UILayout::IsDragging()))
+		{
+			Point dragDelta(event.motion.xrel * 100. / Screen::Zoom(),
+				event.motion.yrel * 100. / Screen::Zoom());
+			if(SDL_GetModState() & KMOD_SHIFT)
+				dragDelta *= .25;
+			if(UILayout::Drag(dragDelta))
+			{
+				UILayout::ClearRegions();
+				AdjustViewport();
+				PushOrPop();
+				return true;
+			}
+		}
+		if(event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT && UILayout::EndDrag())
+		{
+			UILayout::ClearRegions();
+			AdjustViewport();
+			PushOrPop();
+			return true;
+		}
+		if(event.type == SDL_KEYDOWN && !event.key.repeat
+				&& (keyCommand.Has(Command::LAYOUT_RESET) || event.key.keysym.sym == SDLK_DELETE)
+				&& UILayout::ResetSelected())
+		{
+			UILayout::ClearRegions();
+			AdjustViewport();
+			PushOrPop();
+			return true;
+		}
+	}
+
+	// The layout editor is modal. Do not let clicks, text input, or shortcuts
+	// leak into the panel underneath when no editor target handled them.
+	if(UILayout::IsEditing() && !assetPickerOpen
+			&& (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP
+				|| event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEWHEEL
+				|| event.type == SDL_KEYDOWN || event.type == SDL_KEYUP
+				|| event.type == SDL_TEXTINPUT || event.type == SDL_TEXTEDITING))
+	{
+		PushOrPop();
+		return true;
+	}
+
 	bool handled = false;
 
 	vector<shared_ptr<Panel>>::iterator it = stack.end();
@@ -41,15 +196,17 @@ bool UI::Handle(const SDL_Event &event)
 		// Panels that are about to be popped cannot handle any other events.
 		if(count(toPop.begin(), toPop.end(), it->get()))
 			continue;
+		// Keep the panel alive if handling the event resets the UI stack.
+		shared_ptr<Panel> panel = *it;
 
 		if(event.type == SDL_MOUSEMOTION)
 		{
 			if(event.motion.state & SDL_BUTTON(1))
-				handled = (*it)->DoDrag(
+				handled = panel->DoDrag(
 					event.motion.xrel * 100. / Screen::Zoom(),
 					event.motion.yrel * 100. / Screen::Zoom());
 			else
-				handled = (*it)->DoHover(
+				handled = panel->DoHover(
 					Screen::Left() + event.motion.x * 100 / Screen::Zoom(),
 					Screen::Top() + event.motion.y * 100 / Screen::Zoom());
 		}
@@ -58,29 +215,35 @@ bool UI::Handle(const SDL_Event &event)
 			int x = Screen::Left() + event.button.x * 100 / Screen::Zoom();
 			int y = Screen::Top() + event.button.y * 100 / Screen::Zoom();
 			if(event.button.button == SDL_BUTTON_LEFT)
-				handled = (*it)->ZoneClick(Point(x, y));
+				handled = panel->ZoneClick(Point(x, y));
 			if(!handled)
-				handled = (*it)->DoClick(x, y, static_cast<MouseButton>(event.button.button), event.button.clicks);
+				handled = panel->DoClick(x, y, static_cast<MouseButton>(event.button.button), event.button.clicks);
 		}
 		else if(event.type == SDL_MOUSEBUTTONUP)
 		{
 			int x = Screen::Left() + event.button.x * 100 / Screen::Zoom();
 			int y = Screen::Top() + event.button.y * 100 / Screen::Zoom();
-			handled = (*it)->DoRelease(x, y, static_cast<MouseButton>(event.button.button));
+			handled = panel->DoRelease(x, y, static_cast<MouseButton>(event.button.button));
 		}
 		else if(event.type == SDL_MOUSEWHEEL)
-			handled = (*it)->DoScroll(event.wheel.x, event.wheel.y);
+			handled = panel->DoScroll(event.wheel.x, event.wheel.y);
 		else if(event.type == SDL_KEYDOWN)
 		{
 			Command command(event.key.keysym.sym);
-			handled = (*it)->DoKeyDown(event.key.keysym.sym, event.key.keysym.mod, command, !event.key.repeat);
+			handled = panel->DoKeyDown(event.key.keysym.sym, event.key.keysym.mod, command, !event.key.repeat);
 		}
 		else if(event.type == SDL_TEXTINPUT)
-			handled = (*it)->DoTextInput(event.text.text);
+			handled = panel->DoTextInput(event.text.text);
+
+		// A panel may reset the UI while handling an event. Do not continue
+		// with an iterator into the old stack after that happens.
+		if(find(stack.begin(), stack.end(), panel) == stack.end()
+				|| find(toPop.begin(), toPop.end(), panel.get()) != toPop.end())
+			break;
 
 		// If this panel does not want anything below it to receive events, do
 		// not let this event trickle further down the stack.
-		if((*it)->TrapAllEvents())
+		if(panel->TrapAllEvents())
 			break;
 	}
 
@@ -113,6 +276,8 @@ void UI::StepAll()
 // Draw all the panels.
 void UI::DrawAll()
 {
+	UILayout::ClearRegions();
+
 	// First, clear all the clickable zones. New ones will be added in the
 	// course of drawing the screen.
 	for(const shared_ptr<Panel> &it : stack)
@@ -126,6 +291,44 @@ void UI::DrawAll()
 
 	for( ; it != stack.end(); ++it)
 		(*it)->DoDraw();
+
+	// User-created elements are global overlays. Draw them after the active
+	// panel so their editor regions are on top of the built-in regions.
+	if(!LayoutAssetPickerPanel::IsOpen())
+		UILayout::DrawCustom(&AsyncQueue());
+
+}
+
+
+
+void UI::DrawLayoutEditor()
+{
+	if(LayoutAssetPickerPanel::IsOpen() || !UILayout::IsEditing())
+		return;
+
+	const Color &active = *GameData::Colors().Get("active");
+	LineShader::Draw(Screen::TopLeft(), Screen::TopRight(), 1.f, active);
+	LineShader::Draw(Screen::TopRight(), Screen::BottomRight(), 1.f, active);
+	LineShader::Draw(Screen::BottomRight(), Screen::BottomLeft(), 1.f, active);
+	LineShader::Draw(Screen::BottomLeft(), Screen::TopLeft(), 1.f, active);
+	FontSet::Get(14).Draw("UI layout editor: ON (" + Command::LAYOUT_TOGGLE.KeyName()
+			+ " / Esc to exit)", Point(Screen::Left() + 10., Screen::Top() + 10.), active);
+
+	if(UILayout::Regions().empty())
+		return;
+	const Color &normal = *GameData::Colors().Get("medium");
+	const Color &selected = *GameData::Colors().Get("active");
+	for(const UILayout::Region &region : UILayout::Regions())
+	{
+		const bool isSelected = UILayout::IsSelected(region.panel, region.element);
+		const Color &color = isSelected ? selected : normal;
+		const float width = isSelected ? 1.5f : .75f;
+		const Rectangle &bounds = region.bounds;
+		LineShader::Draw(bounds.TopLeft(), bounds.TopRight(), width, color);
+		LineShader::Draw(bounds.TopRight(), bounds.BottomRight(), width, color);
+		LineShader::Draw(bounds.BottomRight(), bounds.BottomLeft(), width, color);
+		LineShader::Draw(bounds.BottomLeft(), bounds.TopLeft(), width, color);
+	}
 }
 
 
@@ -242,6 +445,8 @@ shared_ptr<Panel> UI::Top() const
 // Delete all the panels and clear the "done" flag.
 void UI::Reset()
 {
+	UILayout::CancelDrag();
+	UILayout::ClearRegions();
 	stack.clear();
 	toPush.clear();
 	toPop.clear();
@@ -366,6 +571,7 @@ void UI::PlaySound(UISound sound)
 // If a push or pop is queued, apply it.
 void UI::PushOrPop()
 {
+	const bool stackChanged = !toPush.empty() || !toPop.empty();
 	// Handle any panels that should be added.
 	for(shared_ptr<Panel> &panel : toPush)
 		if(panel)
@@ -388,4 +594,6 @@ void UI::PushOrPop()
 	// Each panel potentially has its own children, which could be modified.
 	for(auto &panel : stack)
 		panel->AddOrRemove();
+	if(stackChanged)
+		UILayout::ClearRegions();
 }

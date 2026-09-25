@@ -66,6 +66,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "TaskQueue.h"
 #include "test/Test.h"
 #include "test/TestData.h"
+#include "UILayout.h"
 #include "UniverseObjects.h"
 
 #include <algorithm>
@@ -194,6 +195,15 @@ void GameData::FinishLoading()
 
 	politics.Reset();
 	background.FinishLoading();
+
+	vector<UILayout::Alias> layoutAliases;
+	for(const auto &it : Interfaces())
+	{
+		const Interface &interface = it.second;
+		for(const Interface::LayoutIdentity &identity : interface.LayoutIdentities())
+			layoutAliases.push_back({identity.panel, identity.canonical, identity.legacy});
+	}
+	UILayout::MigrateAliases(layoutAliases);
 }
 
 

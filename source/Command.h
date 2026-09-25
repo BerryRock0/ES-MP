@@ -66,6 +66,18 @@ public:
 	static const Command HELP;
 	static const Command PAUSE;
 	static const Command PERFORMANCE_DISPLAY;
+	static const Command CHEATS;
+	// UI layout editor commands:
+	static const Command LAYOUT_TOGGLE;
+	static const Command LAYOUT_SCALE_UP;
+	static const Command LAYOUT_SCALE_DOWN;
+	static const Command LAYOUT_COLOR;
+	static const Command LAYOUT_VISIBILITY;
+	static const Command LAYOUT_ADD_TEXT;
+	static const Command LAYOUT_ADD_SPRITE;
+	static const Command LAYOUT_REMOVE;
+	static const Command LAYOUT_RESET;
+	static const Command LAYOUT_ASSETS;
 	// Escort commands:
 	static const Command FIGHT;
 	static const Command HOLD_FIRE;

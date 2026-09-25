@@ -78,6 +78,17 @@ const Command Command::FASTFORWARD(ONE << 27, "Toggle fast-forward");
 const Command Command::HELP(ONE << 28, "Show help");
 const Command Command::PAUSE(ONE << 29, "Pause");
 const Command Command::PERFORMANCE_DISPLAY(ONE << 30, "Toggle performance info");
+const Command Command::CHEATS(ONE << 42, "Open cheat console");
+const Command Command::LAYOUT_TOGGLE(ONE << 43, "Toggle UI layout editor");
+const Command Command::LAYOUT_SCALE_UP(ONE << 44, "Increase UI element size");
+const Command Command::LAYOUT_SCALE_DOWN(ONE << 45, "Decrease UI element size");
+const Command Command::LAYOUT_COLOR(ONE << 46, "Cycle UI element font color");
+const Command Command::LAYOUT_VISIBILITY(ONE << 47, "Toggle UI element visibility");
+const Command Command::LAYOUT_ADD_TEXT(ONE << 48, "Add UI text element");
+const Command Command::LAYOUT_ADD_SPRITE(ONE << 49, "Add UI sprite element");
+const Command Command::LAYOUT_REMOVE(ONE << 50, "Remove selected UI element");
+const Command Command::LAYOUT_RESET(ONE << 51, "Reset selected UI element position");
+const Command Command::LAYOUT_ASSETS(ONE << 52, "Browse UI assets");
 const Command Command::FIGHT(ONE << 31, "Fleet: Fight my target");
 const Command Command::HOLD_FIRE(ONE << 32, "Fleet: Toggle hold fire");
 const Command Command::GATHER(ONE << 33, "Fleet: Gather around me");
@@ -290,6 +301,7 @@ void Command::Load(const DataNode &node)
 			{"cloak", Command::CLOAK},
 			{"map", Command::MAP},
 			{"info", Command::INFO},
+			{"cheats", Command::CHEATS},
 			{"fullscreen", Command::FULLSCREEN},
 			{"fastforward", Command::FASTFORWARD},
 			{"fight", Command::FIGHT},

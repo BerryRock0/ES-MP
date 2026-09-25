@@ -56,6 +56,7 @@ protected:
 	virtual bool Drag(double dx, double dy) override;
 	virtual bool Hover(int x, int y) override;
 	virtual bool Scroll(double dx, double dy) override;
+	void Resize() override;
 
 	void SyncScroll(bool animated = true);
 	void Invalidate();
@@ -65,6 +66,7 @@ protected:
 	bool bufferIsValid = false;
 	bool contentsIsValid = false;
 	std::shared_ptr<RenderBuffer> buffer;
+	Rectangle normalRect;
 	Point position;
 	Point size;
 

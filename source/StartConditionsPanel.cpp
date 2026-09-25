@@ -88,6 +88,7 @@ StartConditionsPanel::StartConditionsPanel(PlayerInfo &player, UI &gamePanels, N
 		startConditionsClickZones.emplace_back(firstRectangle + Point(0, i * entryBox.Height()), scenarios.begin() + i);
 
 	description = make_shared<TextArea>();
+	description->SetLayoutKey("StartConditionsPanel", "description");
 	description->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	description->SetColor(*GameData::Colors().Get("medium"));
 	description->SetAlignment(Preferences::GetTextAlignment());

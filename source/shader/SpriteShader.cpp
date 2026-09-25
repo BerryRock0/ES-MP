@@ -37,6 +37,7 @@ namespace {
 	GLint blurI;
 	GLint clipI;
 	GLint alphaI;
+	GLint tintI;
 	GLint swizzleMatrixI;
 	GLint useSwizzleI;
 
@@ -68,6 +69,7 @@ void SpriteShader::Init()
 	blurI = shader->Uniform("blur");
 	clipI = shader->Uniform("clip");
 	alphaI = shader->Uniform("alpha");
+	tintI = shader->Uniform("tint");
 	swizzleMatrixI = shader->Uniform("swizzleMatrix");
 	swizzleMaskI = shader->Uniform("swizzleMask");
 	useSwizzleMaskI = shader->Uniform("useSwizzleMask");
@@ -106,11 +108,19 @@ void SpriteShader::Init()
 void SpriteShader::Draw(const Sprite *sprite, const Point &position,
 	float zoom, const Swizzle *swizzle, float frame, const Point &unit)
 {
+	Draw(sprite, position, Point(zoom, zoom), swizzle, frame, unit);
+}
+
+
+
+void SpriteShader::Draw(const Sprite *sprite, const Point &position, const Point &scale,
+	const Swizzle *swizzle, float frame, const Point &unit)
+{
 	if(!sprite)
 		return;
 
 	Bind();
-	Add(Prepare(sprite, position, zoom, swizzle, frame, unit));
+	Add(Prepare(sprite, position, scale, swizzle, frame, unit));
 	Unbind();
 }
 
@@ -118,6 +128,14 @@ void SpriteShader::Draw(const Sprite *sprite, const Point &position,
 
 SpriteShader::Item SpriteShader::Prepare(const Sprite *sprite, const Point &position,
 	float zoom, const Swizzle *swizzle, float frame, const Point &unit)
+{
+	return Prepare(sprite, position, Point(zoom, zoom), swizzle, frame, unit);
+}
+
+
+
+SpriteShader::Item SpriteShader::Prepare(const Sprite *sprite, const Point &position, const Point &scale,
+	const Swizzle *swizzle, float frame, const Point &unit)
 {
 	if(!sprite)
 		return {};
@@ -132,7 +150,7 @@ SpriteShader::Item SpriteShader::Prepare(const Sprite *sprite, const Point &posi
 	item.position[0] = static_cast<float>(position.X());
 	item.position[1] = static_cast<float>(position.Y());
 	// Rotation and scale.
-	Point scaledUnit = unit * zoom;
+	Point scaledUnit = Point(unit.X() * scale.X(), unit.Y() * scale.Y());
 	Point uw = scaledUnit * sprite->Width();
 	Point uh = scaledUnit * sprite->Height();
 	item.transform[0] = static_cast<float>(-uw.Y());
@@ -197,6 +215,7 @@ void SpriteShader::Add(const Item &item, bool withBlur)
 	glUniform2fv(blurI, 1, withBlur ? item.blur : UNBLURRED);
 	glUniform1f(clipI, item.clip);
 	glUniform1f(alphaI, item.alpha);
+	glUniform4fv(tintI, 1, item.tint);
 
 	glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }

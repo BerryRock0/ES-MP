@@ -53,7 +53,7 @@ void TextArea::SetRect(const Rectangle &r)
 	//       allowing the user to scroll left or right instead of up or
 	//       down. This might be useful for overly long single lined text,
 	//       or for vertical text layout.
-	wrappedText.SetWrapWidth(r.Width());
+	wrappedText.SetWrapWidth(LayoutRectangle(r).Width());
 	ScrollArea::SetRect(r);
 }
 
@@ -138,5 +138,5 @@ void TextArea::Validate(bool trailingBreak)
 
 void TextArea::DrawText(const Point &topLeft)
 {
-	wrappedText.Draw(topLeft, color);
+	wrappedText.Draw(topLeft, LayoutColor(color));
 }

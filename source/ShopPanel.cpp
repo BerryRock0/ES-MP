@@ -101,6 +101,7 @@ ShopPanel::ShopPanel(PlayerInfo &player, bool isOutfitter)
 	SetInterruptible(false);
 
 	selectedQuantity = make_shared<Dropdown>();
+	selectedQuantity->SetLayoutKey("ShopPanel", "quantity");
 	selectedQuantity->SetAlign(Dropdown::LEFT);
 	selectedQuantity->SetFontSize(14);
 	selectedQuantity->SetPadding(0);

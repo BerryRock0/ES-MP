@@ -26,6 +26,7 @@ uniform vec2 blur;
 uniform mat4 swizzleMatrix;
 uniform int useSwizzle;
 uniform float alpha;
+uniform vec4 tint;
 const int range = 5;
 
 in vec2 fragTexCoord;
@@ -79,5 +80,5 @@ void main() {
 		else
 			color = swizzleColor;
 	}
-	finalColor = color * alpha;
+	finalColor = color * tint * alpha;
 }

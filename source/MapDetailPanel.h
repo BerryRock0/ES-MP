@@ -71,6 +71,9 @@ private:
 	void DrawKey();
 	void DrawInfo();
 	void DrawOrbits();
+	Point OrbitCenter() const;
+	Point OrbitScale() const;
+	Rectangle OrbitBounds() const;
 
 	// Set the commodity coloring, and update the player info as well.
 	void SetCommodity(int index);

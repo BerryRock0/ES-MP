@@ -44,6 +44,7 @@ public:
 		float blur[2] = {0.f, 0.f};
 		float clip = 1.f;
 		float alpha = 1.f;
+		float tint[4] = {1.f, 1.f, 1.f, 1.f};
 	};
 
 
@@ -57,7 +58,12 @@ public:
 	// makes it obvious if the reason the sprite isn't displaying properly is because the caller forgot to load it.)
 	static void Draw(const Sprite *sprite, const Point &position, float zoom = 1.f,
 		const Swizzle *swizzle = Swizzle::None(), float frame = 0.f, const Point &unit = Point(0., -1.));
+	// Draw with independent horizontal and vertical scale factors.
+	static void Draw(const Sprite *sprite, const Point &position, const Point &scale,
+		const Swizzle *swizzle = Swizzle::None(), float frame = 0.f, const Point &unit = Point(0., -1.));
 	static Item Prepare(const Sprite *sprite, const Point &position, float zoom = 1.f,
+		const Swizzle *swizzle = Swizzle::None(), float frame = 0.f, const Point &unit = Point(0., -1.));
+	static Item Prepare(const Sprite *sprite, const Point &position, const Point &scale,
 		const Swizzle *swizzle = Swizzle::None(), float frame = 0.f, const Point &unit = Point(0., -1.));
 
 	static void Bind();

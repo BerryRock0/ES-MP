@@ -39,6 +39,7 @@ SpaceportPanel::SpaceportPanel(PlayerInfo &player)
 	SetTrapAllEvents(false);
 
 	description = make_shared<TextArea>();
+	description->SetLayoutKey("SpaceportPanel", "description");
 	description->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	description->SetColor(*GameData::Colors().Get("bright"));
 	description->SetAlignment(Preferences::GetTextAlignment());
@@ -144,6 +145,7 @@ void SpaceportPanel::Resize()
 void SpaceportPanel::InitNewsTextArea()
 {
 	newsMessage = make_shared<TextArea>();
+	newsMessage->SetLayoutKey("SpaceportPanel", "news");
 	newsMessage->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	newsMessage->SetColor(*GameData::Colors().Get("bright"));
 	newsMessage->SetAlignment(Preferences::GetTextAlignment());

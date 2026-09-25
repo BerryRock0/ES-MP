@@ -44,6 +44,21 @@ Edit::Edit()
 
 
 
+void Edit::SetVisible(bool v)
+{
+	if(visible == v)
+		return;
+	visible = v;
+	if(!visible)
+	{
+		SetFocus(false);
+		dragPos = Point();
+		isHover = false;
+	}
+}
+
+
+
 void Edit::SetFontSize(int f)
 {
 	if(f != fontSize)
@@ -58,11 +73,20 @@ void Edit::SetFontSize(int f)
 
 void Edit::SetPosition(const Rectangle &p)
 {
-	if(p != position)
+	normalPosition = p;
+	const Rectangle layoutPosition = LayoutRectangle(p);
+	if(layoutPosition != position)
 	{
-		position = p;
+		position = layoutPosition;
 		ComputeTextBounds();
 	}
+}
+
+
+
+void Edit::Resize()
+{
+	SetPosition(normalPosition);
 }
 
 
@@ -96,7 +120,7 @@ void Edit::Clear()
 
 void Edit::Draw()
 {
-	if(!visible)
+	if(!visible || !LayoutIsVisible())
 		return;
 
 	// const Font &font = FontSet::Get(14);
@@ -106,6 +130,7 @@ void Edit::Draw()
 	{
 		bgColor = *GameData::Colors().Get("panel background");
 	}
+	RegisterLayoutRegion(position);
 	const Font &font = FontSet::Get(fontSize);
 	const Color &hover = *GameData::Colors().Get("hover");
 	const Color &active = *GameData::Colors().Get("active");
@@ -127,7 +152,7 @@ void Edit::Draw()
 
 	font.Draw(Text(),
 		AlignedOffset(0),
-		isActive ? (isHover ? hover : active) : inactive);
+		LayoutColor(isActive ? (isHover ? hover : active) : inactive));
 }
 
 
@@ -177,7 +202,7 @@ void Edit::SetBottomPadding(int p)
 
 bool Edit::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
-	if(!isEditable)
+	if(!visible || !LayoutIsVisible() || !isEditable)
 		return false;
 
 	// Force the caret blink cycle to on after any keypress.
@@ -317,6 +342,11 @@ bool Edit::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isN
 
 bool Edit::Click(int x, int y, MouseButton button, int clicks)
 {
+	if(!visible || !LayoutIsVisible())
+	{
+		SetFocus(false);
+		return false;
+	}
 	if(button != MouseButton::LEFT)
 		return false;
 	if(!position.Contains(Point(x, y)))
@@ -346,6 +376,11 @@ bool Edit::Click(int x, int y, MouseButton button, int clicks)
 
 bool Edit::Drag(double dx, double dy)
 {
+	if(!visible || !LayoutIsVisible())
+	{
+		dragPos = Point();
+		return false;
+	}
 	if(dragPos != Point())
 	{
 		if(highlightPos == INVALID_POS)
@@ -374,6 +409,8 @@ bool Edit::Drag(double dx, double dy)
 bool Edit::Release(int x, int y, MouseButton button)
 {
 	dragPos = Point();
+	if(!visible || !LayoutIsVisible())
+		return false;
 	return false;
 }
 
@@ -383,7 +420,7 @@ bool Edit::OnFocus(bool f)
 {
 	if(f)
 	{
-		if(!isEditable)
+		if(!visible || !LayoutIsVisible() || !isEditable)
 			return false;
 		SDL_StartTextInput();
 		highlightPos = INVALID_POS;
@@ -398,7 +435,7 @@ bool Edit::OnFocus(bool f)
 
 bool Edit::TextInput(const string &s)
 {
-	if(!HasFocus())
+	if(!visible || !LayoutIsVisible() || !HasFocus())
 		return false;
 
 	string newText;

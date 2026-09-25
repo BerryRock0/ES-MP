@@ -37,5 +37,19 @@ void FontSet::Add(const filesystem::path &path, int size)
 
 const Font &FontSet::Get(int size)
 {
-	return fonts[size];
+	auto it = fonts.find(size);
+	if(it != fonts.end())
+		return it->second;
+
+	// User layouts may specify a size that is not present in the current
+	// preferences. Never return a newly-created, uninitialized Font: use the
+	// closest standard size instead.
+	it = fonts.find(size < 14 ? 14 : 18);
+	if(it != fonts.end())
+		return it->second;
+	if(!fonts.empty())
+		return fonts.begin()->second;
+
+	static Font emptyFont;
+	return emptyFont;
 }

@@ -323,9 +323,12 @@ interface "main menu"
 		center 360 0
 	
 	visible if "pilot loaded"
+	active if "can enter ship"
 	button e "_Enter Ship"
 		center 435 155
 		dimensions 90 30
+		layout "enter-ship"
+	active
 	visible if "gamerules unlocked"
 	sprite "ui/wide button"
 		center 435 195
@@ -336,6 +339,7 @@ interface "main menu"
 	button n "_New Pilot"
 		center 435 155
 		dimensions 90 30
+		layout "new-pilot"
 	visible if "pilot dead"
 	button r "_Reload Pilot"
 		center 435 155
@@ -345,18 +349,21 @@ interface "main menu"
 	button m "_Manage Pilots..."
 		center 300 155
 		dimensions 120 30
+		layout "manage-pilots"
 	
 	# Boxes for the two LAN buttons, like the Gamerules button:
 	sprite "ui/very wide button"
 		center 300 195
 	button c "_Connect to Server"
 		center 300 195
-		dimensions 90 30
+		dimensions 120 30
+		layout "connect-server"
 	sprite "ui/very wide button"
 		center 300 235
 	button h "_Start LAN World"
 		center 300 235
 		dimensions 120 30
+		layout "start-lan"
 	
 	visible if "server connected"
 	box "disconnect"
@@ -367,13 +374,17 @@ interface "main menu"
 	button d "_Disconnect"
 		center 300 275
 		dimensions 120 30
+		layout "disconnect"
 	visible
 
 	# Button for keeping an in-memory network world in the local saves folder:
 	visible if "network pilot loaded"
+	sprite "ui/very wide button"
+		center 435 235
 	button s "_Save World Locally"
 		center 435 235
-		dimensions 150 30
+		dimensions 120 30
+		layout "save-world"
 	visible
 	
 	# Left panel (credits):
@@ -1308,8 +1319,10 @@ interface "hud"
 	sprite "ui/radar"
 		from 0 0
 		align top left
+		layout "radar"
 	point "radar"
 		center 128 128
+		layout "radar"
 	value "radar radius" 110
 	value "radar scale" .025
 	value "radar pointer radius" 130

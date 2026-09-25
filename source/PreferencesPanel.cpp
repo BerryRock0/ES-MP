@@ -105,7 +105,7 @@ namespace {
 #endif
 
 	// How many pages of controls and settings there are.
-	const int CONTROLS_PAGE_COUNT = 2;
+	const int CONTROLS_PAGE_COUNT = 3;
 	const int SETTINGS_PAGE_COUNT = 3;
 
 	const map<string, SoundCategory> volumeBars = {
@@ -594,7 +594,9 @@ void PreferencesPanel::DrawControls()
 		"Targeting",
 		"Weapons",
 		"\n",
-		"Interface"
+		"Interface",
+		"\n",
+		"UI Layout"
 	};
 	const string *category = CATEGORIES;
 	static const Command COMMANDS[] = {
@@ -642,7 +644,20 @@ void PreferencesPanel::DrawControls()
 		Command::PAUSE,
 		Command::HELP,
 		Command::MESSAGE_LOG,
-		Command::PERFORMANCE_DISPLAY
+		Command::CHEATS,
+		Command::PERFORMANCE_DISPLAY,
+		Command::NONE,
+		Command::NONE,
+		Command::LAYOUT_TOGGLE,
+		Command::LAYOUT_SCALE_UP,
+		Command::LAYOUT_SCALE_DOWN,
+		Command::LAYOUT_COLOR,
+		Command::LAYOUT_VISIBILITY,
+		Command::LAYOUT_ADD_TEXT,
+		Command::LAYOUT_ADD_SPRITE,
+		Command::LAYOUT_REMOVE,
+		Command::LAYOUT_RESET,
+		Command::LAYOUT_ASSETS
 	};
 
 	int page = 0;

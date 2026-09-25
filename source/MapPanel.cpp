@@ -56,6 +56,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Trade.h"
 #include "text/Truncate.h"
 #include "UI.h"
+#include "UILayout.h"
 #include "Wormhole.h"
 
 #include "opengl.h"
@@ -302,7 +303,7 @@ void MapPanel::Step()
 	if(needsRecenter)
 	{
 		mouse = UI::GetMouse();
-		anchor = mouse / Zoom() - center;
+		anchor = mouse / Zoom() - MapCenter();
 	}
 
 	zoom.Step();
@@ -310,7 +311,10 @@ void MapPanel::Step()
 	// Now, Zoom() has changed (unless at one of the limits). But, we still want
 	// anchor to be the same, so:
 	if(needsRecenter)
-		center = mouse / Zoom() - anchor;
+	{
+		const Point layoutOffset = UILayout::Apply(mapLayoutPanel, mapLayoutElement, Point());
+		center = mouse / Zoom() - anchor - layoutOffset / max(1e-6, Zoom());
+	}
 }
 
 
@@ -318,27 +322,36 @@ void MapPanel::Step()
 void MapPanel::Draw()
 {
 	glClear(GL_COLOR_BUFFER_BIT);
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return;
 
+	// The canvas is the map-space element. Its region is registered before
+	// the map's interface elements, so the editor can select it by dragging
+	// anywhere that is not covered by a more specific control.
+	UILayout::Register(mapLayoutPanel, mapLayoutElement,
+		Rectangle::FromCorner(Screen::TopLeft(), Screen::Dimensions()));
+
+	const Point mapCenter = MapCenter();
 	for(const auto &it : GameData::Galaxies())
-		SpriteShader::Draw(it.second.GetSprite(), Zoom() * (center + it.second.Position()), Zoom());
+		SpriteShader::Draw(it.second.GetSprite(), Zoom() * (mapCenter + it.second.Position()), Zoom());
 
 	if(Preferences::Has("Hide unexplored map regions"))
-		FogShader::Draw(center, Zoom(), player);
+		FogShader::Draw(mapCenter, Zoom(), player);
 
 	// Draw the "visible range" circle around your current location.
 	const Color &viewRangeColor = *GameData::Colors().Get("map view range color");
-	RingShader::Draw(Zoom() * (playerSystem.Position() + center),
+	RingShader::Draw(Zoom() * (playerSystem.Position() + mapCenter),
 		System::DEFAULT_NEIGHBOR_DISTANCE * Zoom(), 2.0f, 1.0f, viewRangeColor);
 	// Draw the jump range circle around your current location if it is different than the
 	// visible range.
 	const Color &jumpRangeColor = *GameData::Colors().Get("map jump range color");
 	if(playerJumpDistance != System::DEFAULT_NEIGHBOR_DISTANCE)
-		RingShader::Draw(Zoom() * (playerSystem.Position() + center),
+		RingShader::Draw(Zoom() * (playerSystem.Position() + mapCenter),
 			(playerJumpDistance + .5) * Zoom(), (playerJumpDistance - .5) * Zoom(), jumpRangeColor);
 
 	// Draw a circle around the selected system.
 	Color brightColor(.4f, 0.f);
-	RingShader::Draw(Zoom() * (selectedSystem->Position() + center),
+	RingShader::Draw(Zoom() * (selectedSystem->Position() + mapCenter),
 		11.f, 9.f, brightColor);
 
 	// Advance a "blink" timer.
@@ -425,7 +438,7 @@ void MapPanel::FinishDrawing(const string &buttonCondition)
 
 			tooltip.SetText(text);
 		}
-		tooltip.SetZone((hoverSystem->Position() + center) * Zoom(), Point(20., 20.));
+		tooltip.SetZone((hoverSystem->Position() + MapCenter()) * Zoom(), Point(20., 20.));
 		tooltip.Draw();
 	}
 
@@ -468,6 +481,9 @@ void MapPanel::UpdateTooltipActivation()
 
 bool MapPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement)
+			&& key != SDLK_ESCAPE && key != 'd')
+		return false;
 	// When changing the map mode, explicitly close all child panels (for example, scrollable text boxes).
 	auto removeChildren = [this]()
 	{
@@ -527,11 +543,13 @@ bool MapPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool
 
 bool MapPanel::Click(int x, int y, MouseButton button, int clicks)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
 	if(button != MouseButton::LEFT)
 		return false;
 
 	// Figure out if a system was clicked on.
-	Point click = Point(x, y) / Zoom() - center;
+	Point click = ScreenToMap(Point(x, y));
 	for(const auto &it : GameData::Systems())
 	{
 		const System &system = it.second;
@@ -551,11 +569,17 @@ bool MapPanel::Click(int x, int y, MouseButton button, int clicks)
 // If the mouse has moved near a known system that contains escorts, track the dwell time.
 bool MapPanel::Hover(int x, int y)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+	{
+		hoverSystem = nullptr;
+		tooltip.Clear();
+		return false;
+	}
 	if(escortSystems.empty())
 		return true;
 
 	// Map from screen coordinates into game coordinates.
-	Point pos = Point(x, y) / Zoom() - center;
+	Point pos = ScreenToMap(Point(x, y));
 	double maxDistance = 2 * OUTER / Zoom();
 
 	// Were we already hovering near an escort's system?
@@ -588,6 +612,8 @@ bool MapPanel::Hover(int x, int y)
 
 bool MapPanel::Drag(double dx, double dy)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
 	center += Point(dx, dy) / Zoom();
 	recentering = 0;
 
@@ -598,6 +624,8 @@ bool MapPanel::Drag(double dx, double dy)
 
 bool MapPanel::Scroll(double dx, double dy)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
 	if(dy > 0.)
 		IncrementZoom();
 	else if(dy < 0.)
@@ -813,6 +841,34 @@ void MapPanel::Find(const string &name)
 double MapPanel::Zoom() const
 {
 	return pow(1.5, zoom.AnimatedValue());
+}
+
+
+
+void MapPanel::SetMapLayoutKey(const string &panel, const string &element)
+{
+	if(!panel.empty() && !element.empty())
+	{
+		mapLayoutPanel = panel;
+		mapLayoutElement = element;
+	}
+}
+
+
+
+Point MapPanel::MapCenter() const
+{
+	// Layout offsets are stored in screen coordinates. Convert them to map
+	// coordinates so that the same offset remains stable while zooming.
+	const double currentZoom = max(1e-6, Zoom());
+	return center + UILayout::Apply(mapLayoutPanel, mapLayoutElement, Point()) / currentZoom;
+}
+
+
+
+Point MapPanel::ScreenToMap(const Point &point) const
+{
+	return point / Zoom() - MapCenter();
 }
 
 
@@ -1141,8 +1197,8 @@ void MapPanel::DrawTravelPlan()
 		else if(fuel[flagship] >= 0.)
 			drawColor = defaultColor;
 
-		Point from = Zoom() * (previous->Position() + center);
-		Point to = Zoom() * (next->Position() + center);
+		Point from = Zoom() * (previous->Position() + MapCenter());
+		Point to = Zoom() * (next->Position() + MapCenter());
 		const Point unit = (to - from).Unit();
 		from += LINK_OFFSET * unit;
 		to -= LINK_OFFSET * unit;
@@ -1160,8 +1216,16 @@ void MapPanel::DrawTravelPlan()
 // Display the name of and distance to the selected system.
 void MapPanel::DrawSelectedSystem()
 {
+	const string layoutPanel = "MapPanel";
+	const string layoutElement = "selected-system";
+	if(!UILayout::IsVisible(layoutPanel, layoutElement))
+		return;
+	const Point offset = UILayout::Apply(layoutPanel, layoutElement, Point());
 	const Sprite *sprite = SpriteSet::Get("ui/selected system");
-	SpriteShader::Draw(sprite, Point(0., Screen::Top() + .5f * sprite->Height()));
+	const Point spritePosition = Point(0., Screen::Top() + .5f * sprite->Height()) + offset;
+	SpriteShader::Draw(sprite, spritePosition);
+	UILayout::Register(layoutPanel, layoutElement,
+		Rectangle::FromCorner(Point(-350., Screen::Top()) + offset, Point(700., 30.)));
 
 	string text;
 	if(!player.KnowsName(*selectedSystem))
@@ -1183,9 +1247,9 @@ void MapPanel::DrawSelectedSystem()
 		text += " (" + to_string(jumps) + " jumps away)";
 
 	const Font &font = FontSet::Get(14);
-	Point pos(-175., Screen::Top() + .5 * (30. - font.Height()));
+	Point pos = Point(-175., Screen::Top() + .5 * (30. - font.Height())) + offset;
 	font.Draw({text, {350, Alignment::CENTER, Truncate::MIDDLE}},
-		pos, *GameData::Colors().Get("bright"));
+		pos, UILayout::ApplyColor(layoutPanel, layoutElement, *GameData::Colors().Get("bright")));
 }
 
 
@@ -1204,7 +1268,7 @@ void MapPanel::DrawEscorts()
 	for(const auto &squad : escortSystems)
 		if(player.HasSeen(*squad.first) || squad.first == specialSystem)
 		{
-			Point pos = zoom * (squad.first->Position() + center);
+			Point pos = zoom * (squad.first->Position() + MapCenter());
 
 			// Active and parked ships are drawn/indicated by a ring in the center.
 			if(squad.second.activeShips || squad.second.parkedShips)
@@ -1264,8 +1328,8 @@ void MapPanel::DrawWormholes()
 		const Color &wormholeDim = Color::Multiply(.33f, arrowColor);
 
 		// Compute the start and end positions of the wormhole link.
-		Point from = zoom * (link.from->Position() + center);
-		Point to = zoom * (link.to->Position() + center);
+		Point from = zoom * (link.from->Position() + MapCenter());
+		Point to = zoom * (link.to->Position() + MapCenter());
 		Point offset = (from - to).Unit() * LINK_OFFSET;
 		from -= offset;
 		to += offset;
@@ -1297,8 +1361,8 @@ void MapPanel::DrawLinks()
 	double zoom = Zoom();
 	for(const Link &link : links)
 	{
-		Point from = zoom * (link.start + center);
-		Point to = zoom * (link.end + center);
+		Point from = zoom * (link.start + MapCenter());
+		Point to = zoom * (link.end + MapCenter());
 		Point unit = (from - to).Unit() * LINK_OFFSET;
 		from -= unit;
 		to += unit;
@@ -1325,7 +1389,7 @@ void MapPanel::DrawSystems()
 	double zoom = Zoom();
 	for(const Node &node : nodes)
 	{
-		Point pos = zoom * (node.position + center);
+		Point pos = zoom * (node.position + MapCenter());
 		if(commodity != SHOW_STARS)
 			RingShader::Draw(pos, OUTER, INNER, node.color);
 		else
@@ -1385,7 +1449,8 @@ void MapPanel::DrawNames()
 	const Font &font = FontSet::Get(useBigFont ? 18 : 14);
 	Point offset(useBigFont ? 8. : 6., -.5 * font.Height());
 	for(const Node &node : nodes)
-		font.Draw(node.name, zoom * (node.position + center) + offset, node.nameColor.Transparent(alpha));
+		font.Draw(node.name, zoom * (node.position + MapCenter()) + offset,
+			UILayout::ApplyColor(mapLayoutPanel, mapLayoutElement, node.nameColor.Transparent(alpha)));
 }
 
 
@@ -1407,7 +1472,7 @@ void MapPanel::DrawMissions()
 		// The special system pointer is larger than the others.
 		++missionCount[specialSystem].drawn;
 		Angle a = Angle(MISSION_POINTERS_ANGLE_DELTA * missionCount[specialSystem].drawn);
-		Point pos = Zoom() * (specialSystem->Position() + center);
+		Point pos = Zoom() * (specialSystem->Position() + MapCenter());
 		PointerShader::Draw(pos, a.Unit(), 20.f, 27.f, -4.f, black);
 		PointerShader::Draw(pos, a.Unit(), 11.5f, 21.5f, -6.f, specialColor);
 	}
@@ -1473,7 +1538,7 @@ void MapPanel::DrawPointer(const System *system, unsigned &systemCount, unsigned
 {
 	if(systemCount >= max)
 		return;
-	DrawPointer(Zoom() * (system->Position() + center), systemCount, color, true, bigger);
+	DrawPointer(Zoom() * (system->Position() + MapCenter()), systemCount, color, true, bigger);
 }
 
 

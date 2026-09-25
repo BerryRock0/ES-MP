@@ -19,7 +19,10 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "../../../source/DataWriter.h"
 
 // ... and any system includes needed for the test file.
+#include "../../../source/DataFile.h"
 #include "../../../source/DataNode.h"
+
+#include <sstream>
 
 namespace { // test namespace
 
@@ -33,12 +36,24 @@ TEST_CASE( "DataWriter::Quote", "[datawriter][quote]" ) {
 	CHECK( DataWriter::Quote("") == "\"\"" );
 	CHECK( DataWriter::Quote(" ") == "\" \"" );
 	CHECK( DataWriter::Quote("a") == "a" );
+	CHECK( DataWriter::Quote("#1") == "\"#1\"" );
 	CHECK( DataWriter::Quote("multiple spaces here ") == "\"multiple spaces here \"" );
 	CHECK( DataWriter::Quote("\"") == "`\"`" );
 	CHECK( DataWriter::Quote("quote and\" space ") == "`quote and\" space `" );
 	CHECK( DataWriter::Quote("`") == "\"`\"" );
 	CHECK( DataWriter::Quote("long ` text") == "\"long ` text\"" );
 }
+
+TEST_CASE( "DataWriter quotes comment-like tokens", "[datawriter][quote]" ) {
+	DataWriter writer;
+	writer.Write("element", "Layout", "#1", .1, .2);
+	std::istringstream input(writer.SaveToString());
+	DataFile file(input);
+	REQUIRE( file.begin() != file.end() );
+	CHECK( file.begin()->Token(2) == "#1" );
+}
+
+
 
 TEST_CASE( "DataWriter::WriteComment", "[datawriter][writecomment]" ) {
 	DataWriter writer;

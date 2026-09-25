@@ -35,9 +35,11 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "image/SpriteSet.h"
 #include "shader/SpriteShader.h"
 #include "UI.h"
+#include "UILayout.h"
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 using namespace std;
 
@@ -74,6 +76,7 @@ void Interface::Load(const DataNode &node)
 	// Re-loading an interface always clears the previous interface, rather than
 	// appending new elements to the end of it.
 	elements.clear();
+	layoutIdentities.clear();
 	points.clear();
 	values.clear();
 	lists.clear();
@@ -84,6 +87,7 @@ void Interface::Load(const DataNode &node)
 	// Now, parse the elements in it.
 	string visibleIf;
 	string activeIf;
+	set<string> semanticIds;
 	for(const DataNode &child : node)
 	{
 		const string &key = child.Token(0);
@@ -95,7 +99,19 @@ void Interface::Load(const DataNode &node)
 		else if((key == "point" || key == "box") && hasValue)
 		{
 			// This node specifies a named point where custom drawing is done.
-			points[child.Token(1)].Load(child, anchor);
+			Interface::Element &point = points[child.Token(1)];
+			point.Load(child, anchor);
+			const string legacyElement = node.Token(1) + "#point";
+			const string semantic = point.SemanticLayout();
+			const string semanticKey = semantic.empty() ? string() : "point/" + semantic;
+			const bool unique = semantic.empty() || semanticIds.insert(semanticKey).second;
+			if(!unique)
+				child.PrintTrace("Duplicate layout ID; using the point name fallback:");
+			const string element = unique
+				? node.Token(1) + "#" + (semantic.empty() ? "point-name/" + child.Token(1) : "point/" + semantic)
+				: node.Token(1) + "#point-name/" + child.Token(1);
+			point.SetLayoutKey("Interface", element, legacyElement);
+			layoutIdentities.push_back({"Interface", element, legacyElement});
 		}
 		else if(key == "list" && hasValue)
 		{
@@ -138,7 +154,20 @@ void Interface::Load(const DataNode &node)
 				continue;
 			}
 
-			// If we get here, a new element was just added.
+			// If we get here, a new element was just added. Keep the old ordinal
+			// as a compatibility fallback, but prefer an explicit semantic ID.
+			const size_t legacyIndex = elements.size() - 1;
+			const string legacyElement = node.Token(1) + "#" + to_string(legacyIndex);
+			const string semantic = elements.back()->SemanticLayout();
+			const string semanticKey = semantic.empty() ? string() : "element/" + semantic;
+			const bool unique = semantic.empty() || semanticIds.insert(semanticKey).second;
+			if(!unique)
+				child.PrintTrace("Duplicate layout ID; using the legacy element fallback:");
+			const string element = unique && !semantic.empty()
+				? node.Token(1) + "#element/" + semantic
+				: legacyElement;
+			elements.back()->SetLayoutKey("Interface", element, legacyElement);
+			layoutIdentities.push_back({"Interface", element, legacyElement});
 			elements.back()->SetConditions(visibleIf, activeIf);
 		}
 	}
@@ -158,7 +187,8 @@ void Interface::Draw(const Information &info, Panel *panel) const
 // Check if a named point exists.
 bool Interface::HasPoint(const string &name) const
 {
-	return points.contains(name);
+	auto it = points.find(name);
+	return it != points.end() && it->second.LayoutIsVisible();
 }
 
 
@@ -170,7 +200,7 @@ Point Interface::GetPoint(const string &name) const
 	if(it == points.end())
 		return Point();
 
-	return it->second.Bounds().Center();
+	return it->second.LayoutBounds().Center();
 }
 
 
@@ -181,7 +211,7 @@ Rectangle Interface::GetBox(const string &name) const
 	if(it == points.end())
 		return Rectangle();
 
-	return it->second.Bounds();
+	return it->second.LayoutBounds();
 }
 
 
@@ -306,6 +336,8 @@ void Interface::Element::Load(const DataNode &node, const Point &globalAnchor)
 			// Add this much padding when aligning the object within its bounding box.
 			padding = Point(child.Value(1), child.Value(2));
 		}
+		else if(key == "layout" && hasValue)
+			semanticLayout = child.Token(1);
 		else if(!ParseLine(child))
 			child.PrintTrace("Skipping unrecognized attribute:");
 	}
@@ -336,9 +368,20 @@ void Interface::Element::Draw(const Information &info, Panel *panel) const
 {
 	if(!info.HasCondition(visibleIf))
 		return;
+	if(!layoutPanel.empty() && !layoutElement.empty() && !LayoutIsVisible())
+		return;
 
 	// Get the bounding box of this element, relative to the anchor point.
 	Rectangle box = (info.HasCustomRegion() ? Bounds(info) : Bounds());
+	Point scale(1., 1.);
+	if(!layoutPanel.empty() && !layoutElement.empty())
+	{
+		const string &styleElement = EffectiveLayoutElement();
+		scale = UILayout::ApplyScale(layoutPanel, styleElement, Point(1., 1.));
+		box = Rectangle(UILayout::Apply(layoutPanel, styleElement, box.Center()),
+			UILayout::ApplyScale(layoutPanel, styleElement, box.Dimensions()));
+		UILayout::Register(layoutPanel, layoutElement, box);
+	}
 	// Check if this element is active.
 	int state = info.HasCondition(activeIf);
 	// Check if the mouse is hovering over this element.
@@ -350,6 +393,7 @@ void Interface::Element::Draw(const Information &info, Panel *panel) const
 
 	// Figure out how the element should be aligned within its bounding box.
 	Point nativeDimensions = NativeDimensions(info, state);
+	nativeDimensions *= scale;
 	Point slack = .5 * (box.Dimensions() - nativeDimensions) - padding;
 	Rectangle rect(box.Center() + alignment * slack, nativeDimensions);
 
@@ -379,6 +423,54 @@ Rectangle Interface::Element::Bounds() const
 Rectangle Interface::Element::Bounds(const Information &info) const
 {
 	return Rectangle::WithCorners(from.Get(info), to.Get(info));
+}
+
+
+
+bool Interface::Element::LayoutIsVisible() const
+{
+	if(layoutPanel.empty() || layoutElement.empty())
+		return true;
+	return UILayout::IsVisible(layoutPanel, EffectiveLayoutElement());
+}
+
+
+
+Rectangle Interface::Element::LayoutBounds() const
+{
+	Rectangle box = Bounds();
+	if(layoutPanel.empty() || layoutElement.empty())
+		return box;
+
+	const string &styleElement = EffectiveLayoutElement();
+	box = Rectangle(
+		UILayout::Apply(layoutPanel, styleElement, box.Center()),
+		UILayout::ApplyScale(layoutPanel, styleElement, box.Dimensions()));
+	if(LayoutIsVisible())
+		UILayout::Register(layoutPanel, layoutElement, box);
+	return box;
+}
+
+
+
+const string &Interface::Element::EffectiveLayoutElement() const
+{
+	if(layoutPanel.empty() || layoutElement.empty() || legacyLayoutElement.empty()
+			|| UILayout::Has(layoutPanel, layoutElement))
+		return layoutElement;
+	if(UILayout::Has(layoutPanel, legacyLayoutElement))
+		return legacyLayoutElement;
+	return layoutElement;
+}
+
+
+
+void Interface::Element::SetLayoutKey(const string &panel, const string &element,
+	const string &legacyElement)
+{
+	layoutPanel = panel;
+	layoutElement = element;
+	legacyLayoutElement = legacyElement;
 }
 
 
@@ -657,7 +749,8 @@ void Interface::BasicTextElement::Draw(const Rectangle &rect, const Information 
 		return;
 
 	const auto layout = Layout(static_cast<int>(rect.Width()), truncate);
-	FontSet::Get(fontSize).Draw({GetString(info), layout}, rect.TopLeft(), *color[state]);
+	const Color &drawColor = UILayout::ApplyColor(layoutPanel, layoutElement, *color[state]);
+	FontSet::Get(fontSize).Draw({GetString(info), layout}, rect.TopLeft(), drawColor);
 }
 
 
@@ -723,7 +816,7 @@ Point Interface::WrappedTextElement::NativeDimensions(const Information &info, i
 void Interface::WrappedTextElement::Draw(const Rectangle &rect, const Information &info, int state) const
 {
 	// The text has already been wrapped in NativeDimensions called by Element::Draw.
-	text.Draw(rect.TopLeft(), *color[state]);
+	text.Draw(rect.TopLeft(), UILayout::ApplyColor(layoutPanel, layoutElement, *color[state]));
 }
 
 

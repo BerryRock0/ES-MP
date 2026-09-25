@@ -21,6 +21,17 @@
 "View star map" 109
 "View player info" 105
 "View message log" 47
+"Open cheat console" 1073741883
+"Toggle UI layout editor" 1073741885
+"Increase UI element size" 1073741886
+"Decrease UI element size" 1073741887
+"Cycle UI element font color" 1073741888
+"Toggle UI element visibility" 1073741889
+"Add UI text element" 1073741890
+"Add UI sprite element" 1073741891
+"Remove selected UI element" 42
+"Reset selected UI element position" 127
+"Browse UI assets" 1073741893
 "Toggle fullscreen" 1073741892
 "Toggle fast-forward" 1073741881
 "Pause" 112

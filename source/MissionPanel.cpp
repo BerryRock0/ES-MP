@@ -46,6 +46,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "TextArea.h"
 #include "text/Truncate.h"
 #include "UI.h"
+#include "UILayout.h"
 
 #include <algorithm>
 #include <cmath>
@@ -132,6 +133,7 @@ MissionPanel::MissionPanel(PlayerInfo &player)
 	tooltip(150, Alignment::LEFT, Tooltip::Direction::DOWN_RIGHT, Tooltip::Corner::BOTTOM_LEFT,
 		GameData::Colors().Get("tooltip background"), GameData::Colors().Get("medium"))
 {
+	SetMapLayoutKey("MissionPanel", "canvas");
 	// Re-do job sorting since something could have changed
 	player.SortAvailable();
 
@@ -167,6 +169,7 @@ MissionPanel::MissionPanel(const MapPanel &panel)
 	tooltip(150, Alignment::LEFT, Tooltip::Direction::DOWN_RIGHT, Tooltip::Corner::BOTTOM_LEFT,
 		GameData::Colors().Get("tooltip background"), GameData::Colors().Get("medium"))
 {
+	SetMapLayoutKey("MissionPanel", "canvas");
 	Audio::Pause();
 
 	// Re-do job sorting since something could have changed
@@ -249,43 +252,45 @@ void MissionPanel::Draw()
 
 	const Set<Color> &colors = GameData::Colors();
 
+	const bool mapVisible = UILayout::IsVisible(mapLayoutPanel, mapLayoutElement);
 	const Color &routeColor = *colors.Get("mission route");
 	const Ship *flagship = player.Flagship();
 	const double jumpRange = flagship ? flagship->JumpNavigation().JumpRange() : 0.;
 	const System *previous = player.GetSystem();
 	const vector<const System *> plan = distance.Plan(*selectedSystem);
-	for(auto it = plan.rbegin(); it != plan.rend(); ++it)
-	{
-		const System *next = *it;
+	if(mapVisible)
+		for(auto it = plan.rbegin(); it != plan.rend(); ++it)
+		{
+			const System *next = *it;
 
-		bool isJump, isWormhole, isMappable;
-		if(!GetTravelInfo(previous, next, jumpRange, isJump, isWormhole, isMappable, nullptr))
-			break;
-		if(isWormhole && !isMappable)
-			continue;
+			bool isJump, isWormhole, isMappable;
+			if(!GetTravelInfo(previous, next, jumpRange, isJump, isWormhole, isMappable, nullptr))
+				break;
+			if(isWormhole && !isMappable)
+				continue;
 
-		Point from = Zoom() * (previous->Position() + center);
-		Point to = Zoom() * (next->Position() + center);
-		const Point unit = (to - from).Unit();
-		from += LINK_OFFSET * unit;
-		to -= LINK_OFFSET * unit;
+			Point from = Zoom() * (previous->Position() + MapCenter());
+			Point to = Zoom() * (next->Position() + MapCenter());
+			const Point unit = (to - from).Unit();
+			from += LINK_OFFSET * unit;
+			to -= LINK_OFFSET * unit;
 
-		// Non-hyperspace jumps are drawn with a dashed line.
-		if(isJump)
-			LineShader::DrawDashed(from, to, unit, 3.f, routeColor, 11., 4.);
-		else
-			LineShader::Draw(from, to, 3.f, routeColor);
+			// Non-hyperspace jumps are drawn with a dashed line.
+			if(isJump)
+				LineShader::DrawDashed(from, to, unit, 3.f, routeColor, 11., 4.);
+			else
+				LineShader::Draw(from, to, 3.f, routeColor);
 
-		previous = next;
-	}
+			previous = next;
+		}
 
 	const Color &availableColor = *colors.Get("available back");
 	const Color &unavailableColor = *colors.Get("unavailable back");
 	const Color &currentColor = *colors.Get("active back");
 	const Color &blockedColor = *colors.Get("blocked back");
-	if(availableIt != available.end() && availableIt->Destination())
+	if(mapVisible && availableIt != available.end() && availableIt->Destination())
 		DrawMissionSystem(*availableIt, CanAccept() ? availableColor : unavailableColor);
-	if(acceptedIt != accepted.end() && acceptedIt->Destination())
+	if(mapVisible && acceptedIt != accepted.end() && acceptedIt->Destination())
 		DrawMissionSystem(*acceptedIt, IsSatisfied(*acceptedIt) ? currentColor : blockedColor);
 
 	Point pos;
@@ -498,7 +503,7 @@ bool MissionPanel::Click(int x, int y, MouseButton button, int clicks)
 	}
 
 	// Figure out if a system was clicked on.
-	Point click = Point(x, y) / Zoom() - center;
+	Point click = ScreenToMap(Point(x, y));
 	const System *system = nullptr;
 	for(const auto &it : GameData::Systems())
 		if(it.second.IsValid() && click.Distance(it.second.Position()) < 10.
@@ -673,6 +678,7 @@ void MissionPanel::Resize()
 void MissionPanel::InitTextArea()
 {
 	description = make_shared<TextArea>();
+	description->SetLayoutKey("MissionPanel", "description");
 	description->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	description->SetAlignment(Preferences::GetTextAlignment());
 	description->SetColor(*GameData::Colors().Get("bright"));
@@ -754,7 +760,7 @@ void MissionPanel::DrawMissionSystem(const Mission &mission, const Color &color)
 
 	double zoom = Zoom();
 	auto drawRing = [&](const System *system, const Color &drawColor)
-		{ RingShader::Add(zoom * (system->Position() + center), 22.f, 20.5f, drawColor); };
+		{ RingShader::Add(zoom * (system->Position() + MapCenter()), 22.f, 20.5f, drawColor); };
 
 	RingShader::Bind();
 	{

@@ -347,6 +347,11 @@ public:
 	void Destroy();
 	void SelfDestruct();
 	void Restore();
+	// Toggle the persistent cheat god-mode flag for this ship.
+	void SetGodMode(bool enabled);
+	bool GodMode() const;
+	// Apply direct hull damage from a cheat command, bypassing god mode.
+	void ApplyCheatDamage(double amount);
 	bool IsDamaged() const;
 	// Check if this ship has been destroyed.
 	bool IsDestroyed() const;
@@ -654,6 +659,7 @@ private:
 	bool shouldDeploy = false;
 	bool forceDeployed = false;
 	bool isOverheated = false;
+	bool godMode = false;
 	bool isBoarding = false;
 	bool hasBoarded = false;
 	bool isFleeing = false;

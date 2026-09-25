@@ -50,12 +50,22 @@ ScrollArea::~ScrollArea()
 
 void ScrollArea::SetRect(const Rectangle &r)
 {
-	position = r.Center();
-	size = r.Dimensions();
+	normalRect = r;
+	const Rectangle layoutRect = LayoutRectangle(r);
+	position = layoutRect.Center();
+	size = layoutRect.Dimensions();
 	buffer.reset();
-	scroll.SetDisplaySize(r.Height());
-	scrollBar.displaySizeFraction = scroll.DisplaySize() / scroll.MaxValue();
+	scroll.SetDisplaySize(size.Y());
+	scrollBar.displaySizeFraction = scroll.MaxValue()
+		? scroll.DisplaySize() / scroll.MaxValue() : 0.;
 	Invalidate();
+}
+
+
+
+void ScrollArea::Resize()
+{
+	SetRect(normalRect);
 }
 
 
@@ -98,6 +108,13 @@ void ScrollArea::Validate(bool trailingBreak)
 
 void ScrollArea::Draw()
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return;
+	}
+	RegisterLayoutRegion(Rectangle(position, size));
 	if(!buffer)
 		buffer = make_unique<RenderBuffer>(size);
 
@@ -136,6 +153,12 @@ void ScrollArea::DrawText(const Point &topLeft)
 
 bool ScrollArea::Click(int x, int y, MouseButton button, int clicks)
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return false;
+	}
 	if(scroll.Scrollable() && scrollBar.SyncClick(scroll, x, y, button, clicks))
 	{
 		bufferIsValid = false;
@@ -155,6 +178,12 @@ bool ScrollArea::Click(int x, int y, MouseButton button, int clicks)
 
 bool ScrollArea::Drag(double dx, double dy)
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return false;
+	}
 	if(scrollBar.SyncDrag(scroll, dx, dy))
 	{
 		bufferIsValid = false;
@@ -173,6 +202,12 @@ bool ScrollArea::Drag(double dx, double dy)
 
 bool ScrollArea::Release(int x, int y, MouseButton button)
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return false;
+	}
 	if(button != MouseButton::LEFT)
 		return false;
 
@@ -185,6 +220,12 @@ bool ScrollArea::Release(int x, int y, MouseButton button)
 
 bool ScrollArea::Hover(int x, int y)
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return false;
+	}
 	scrollBar.Hover(x, y);
 
 	if(!buffer)
@@ -198,6 +239,12 @@ bool ScrollArea::Hover(int x, int y)
 
 bool ScrollArea::Scroll(double dx, double dy)
 {
+	if(!LayoutIsVisible())
+	{
+		dragging = false;
+		hovering = false;
+		return false;
+	}
 	if(hovering)
 	{
 		scroll.Scroll(-dy * Preferences::ScrollSpeed());

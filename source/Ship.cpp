@@ -170,6 +170,7 @@ Ship::Ship(const DataNode &node, const ConditionsStore *playerConditions)
 
 void Ship::Load(const DataNode &node, const ConditionsStore *playerConditions)
 {
+	godMode = false;
 	if(node.Size() >= 2)
 		trueModelName = node.Token(1);
 	if(node.Size() >= 3)
@@ -2611,6 +2612,8 @@ const vector<Ship::EnginePoint> &Ship::SteeringEnginePoints() const
 // created as a derelict.
 void Ship::Disable()
 {
+	if(godMode)
+		return;
 	levels.shields = 0.;
 	levels.hull = min(levels.hull, .5 * minimumHull);
 	isDisabled = true;
@@ -2643,6 +2646,39 @@ void Ship::Restore()
 	explosionRate = 0;
 	UnmarkForRemoval();
 	Recharge();
+}
+
+
+
+void Ship::SetGodMode(bool enabled)
+{
+	godMode = enabled;
+}
+
+
+
+bool Ship::GodMode() const
+{
+	return godMode;
+}
+
+
+
+void Ship::ApplyCheatDamage(double amount)
+{
+	if(!std::isfinite(amount) || amount <= 0. || IsDestroyed())
+		return;
+
+	const bool wasDisabled = IsDisabled();
+	const bool wasDestroyed = IsDestroyed();
+	levels.shields = 0.;
+	levels.hull -= amount;
+	levels.hull = max(-1., levels.hull);
+	isDisabled = levels.hull < minimumHull;
+	if(!wasDisabled && isDisabled)
+		unhandledEvents.emplace_back(nullptr, shared_from_this(), ShipEvent::DISABLE);
+	if(!wasDestroyed && IsDestroyed())
+		unhandledEvents.emplace_back(nullptr, shared_from_this(), ShipEvent::DESTROY);
 }
 
 
@@ -3236,6 +3272,9 @@ double Ship::CurrentSpeed() const
 // Create any target effects as sparks.
 int Ship::TakeDamage(vector<Visual> &visuals, const DamageDealt &damage, const Government *sourceGovernment)
 {
+	if(godMode)
+		return 0;
+
 	// If the damage source government deals a DoT effect to this ship that
 	// disables or kills it outside of this function call, that event should
 	// still be attributed to this government.
@@ -4488,7 +4527,35 @@ void Ship::DoGeneration()
 	// Handle ionization effects, etc.
 	bool wasDisabled = levels.hull < minimumHull;
 	bool wasDestroyed = IsDestroyed();
-	DoStatusEffects(isDisabled);
+	if(godMode)
+	{
+		levels.hull = MaxHull();
+		levels.shields = MaxShields();
+		levels.heat = IdleHeat();
+		ClearStatusEffects();
+		isOverheated = false;
+		isDisabled = false;
+	}
+	else
+	{
+		DoStatusEffects(isDisabled);
+
+		levels.heat -= levels.heat * HeatDissipation();
+		if(levels.heat > MaxHeat())
+		{
+			isOverheated = true;
+			double heatRatio = HeatFraction() / cache.overheatDamageThreshold;
+			if(heatRatio > 1.)
+				levels.hull -= cache.overheatDamageRate * heatRatio;
+		}
+		else if(levels.heat < .9 * MaxHeat())
+			isOverheated = false;
+
+		if(!wasDisabled && levels.hull < minimumHull)
+			unhandledEvents.emplace_back(lastHitBy, shared_from_this(), ShipEvent::DISABLE);
+		if(!wasDestroyed && IsDestroyed())
+			unhandledEvents.emplace_back(lastHitBy, shared_from_this(), ShipEvent::DESTROY);
+	}
 
 	// When ships recharge, what actually happens is that they can exceed their
 	// maximum capacity for the rest of the turn, but must be clamped to the
@@ -4497,28 +4564,12 @@ void Ship::DoGeneration()
 	levels.energy = min(levels.energy, MaxEnergy());
 	levels.fuel = min(levels.fuel, MaxFuel());
 
-	levels.heat -= levels.heat * HeatDissipation();
-	if(levels.heat > MaxHeat())
-	{
-		isOverheated = true;
-		double heatRatio = HeatFraction() / cache.overheatDamageThreshold;
-		if(heatRatio > 1.)
-			levels.hull -= cache.overheatDamageRate * heatRatio;
-	}
-	else if(levels.heat < .9 * MaxHeat())
-		isOverheated = false;
-
-	if(!wasDisabled && levels.hull < minimumHull)
-		unhandledEvents.emplace_back(lastHitBy, shared_from_this(), ShipEvent::DISABLE);
-	if(!wasDestroyed && IsDestroyed())
-		unhandledEvents.emplace_back(lastHitBy, shared_from_this(), ShipEvent::DESTROY);
-
 	double maxShields = MaxShields();
 	levels.shields = min(levels.shields, maxShields);
 	double maxHull = MaxHull();
 	levels.hull = min(levels.hull, maxHull);
 
-	isDisabled = isOverheated || levels.hull < minimumHull || (!crew && RequiredCrew());
+	isDisabled = !godMode && (isOverheated || levels.hull < minimumHull || (!crew && RequiredCrew()));
 
 	// Update ship supply levels.
 	if(isDisabled)

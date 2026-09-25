@@ -25,11 +25,13 @@ target_sources(EndlessSkyTests PRIVATE
 	unit/src/test_angle.cpp
 	unit/src/test_bitset.cpp
 	unit/src/test_categoryList.cpp
+	unit/src/test_cheatcommand.cpp
 	unit/src/test_conditionAssignments.cpp
 	unit/src/test_conditionSet.cpp
 	unit/src/test_conditionsStore.cpp
 	unit/src/test_datafile.cpp
 	unit/src/test_datanode.cpp
+	unit/src/test_interface.cpp
 	unit/src/test_datawriter.cpp
 	unit/src/test_dictionary.cpp
 	unit/src/test_distance_calculation_settings.cpp

@@ -53,6 +53,8 @@ public:
 	void StepAll();
 	// Draw all the panels.
 	void DrawAll();
+	// Draw the layout-editor overlay after all panel and auxiliary drawing.
+	void DrawLayoutEditor();
 
 	TaskQueue &SyncQueue();
 	TaskQueue &AsyncQueue();

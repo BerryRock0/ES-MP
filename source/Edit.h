@@ -61,7 +61,7 @@ public:
 	int TopPadding() const { return topPadding; }
 	int BottomPadding() const { return bottomPadding; }
 
-	void SetVisible(bool v) { visible = v; }
+	void SetVisible(bool v);
 	bool Visible() const { return visible; }
 	void SetBgColor(const Color &color) { bgColor = color; }
 	const Color &BgColor() const { return bgColor; }
@@ -77,6 +77,7 @@ protected:
 	virtual bool Release(int x, int y, MouseButton button) override;
 	virtual bool OnFocus(bool f) override;
 	virtual bool TextInput(const std::string &s) override;
+	void Resize() override;
 
 	void MoveCaret(size_t pos);
 	void UpdateCaret(size_t pos);
@@ -97,6 +98,7 @@ protected:
 
 
 private:
+	Rectangle normalPosition;
 	Rectangle position;
 	Rectangle textBounds;
 	Color bgColor;

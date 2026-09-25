@@ -311,6 +311,7 @@ DialogPanel::DialogPanel(DialogInit &init)
 	cancelText = isMission ? "Decline" : "Cancel";
 
 	text = make_shared<TextArea>();
+	text->SetLayoutKey("DialogPanel", "text");
 	text->SetAlignment(Preferences::GetTextAlignment());
 	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	text->SetTruncate(init.truncate);

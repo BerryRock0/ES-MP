@@ -118,6 +118,15 @@ protected:
 
 	double Zoom() const;
 
+	// Set the persistent layout identity for the map canvas. Derived map
+	// panels use separate keys so that, for example, the ports and stars
+	// views can be positioned independently.
+	void SetMapLayoutKey(const std::string &panel, const std::string &element);
+	// Return the map-space center including the editor's canvas offset.
+	Point MapCenter() const;
+	// Convert a screen-space point to map-space coordinates.
+	Point ScreenToMap(const Point &point) const;
+
 	// Check whether the NPC and waypoint conditions of the given mission have
 	// been satisfied.
 	bool IsSatisfied(const Mission &mission) const;
@@ -145,6 +154,9 @@ protected:
 	double playerJumpDistance;
 
 	Point center;
+	// The map canvas can be moved independently from the surrounding UI.
+	std::string mapLayoutPanel = "MapPanel";
+	std::string mapLayoutElement = "canvas";
 	Point recenterVector;
 	int recentering = 0;
 	Animate<double> zoom;
