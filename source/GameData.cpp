@@ -199,8 +199,8 @@ void GameData::FinishLoading()
 	vector<UILayout::Alias> layoutAliases;
 	for(const auto &it : Interfaces())
 	{
-		const auto &interface = it.second;
-		for(const auto &identity : interface.LayoutIdentities())
+		const auto &ui = it.second;
+		for(const auto &identity : ui.LayoutIdentities())
 			layoutAliases.push_back({identity.panel, identity.canonical, identity.legacy});
 	}
 	UILayout::MigrateAliases(layoutAliases);
