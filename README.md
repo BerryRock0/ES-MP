@@ -72,6 +72,22 @@ Press **F12** in the editor to open the sprite browser. It provides:
 
 The browser is modal while open and leaves the layout editor active underneath, so it can be closed and reopened without losing the current editing session.
 
+### Dedicated server downloads
+
+The headless multiplayer server is built as the separate `EndlessSkyServer` target. The continuous CD workflow publishes standalone archives for Linux x86_64, Windows x64, and macOS x86_64 under these names:
+
+- `EndlessSky-server-continuous-linux-x86_64.tar.gz`
+- `EndlessSky-server-continuous-win64.zip`
+- `EndlessSky-server-continuous-macos-x86_64.zip`
+
+The archives are attached to the `continuous` pre-release on GitHub, so a server can be downloaded without installing the graphical client. The server keeps its world and plugin data in its own folder; it does not read client saves or configuration. To build it locally, configure the project as usual and run:
+
+```sh
+cmake --build build/release --target EndlessSkyServer
+```
+
+On Windows, the archive also contains the MinGW runtime DLLs required by the server.
+
 ### Persistence and compatibility
 
 Layout changes are written atomically through a temporary file before replacing `ui-layout.txt`, preventing a failed write from destroying the last valid layout. Schema version 2 is emitted for semantic layout identities. Existing numeric interface IDs remain supported and are migrated after interface data finishes loading. Data-defined elements can opt into stable identities with a child setting such as:

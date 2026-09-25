@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-22.04
     env:
       OUTPUT: Endless_Sky-continuous-x86_64.AppImage
+      OUTPUT_SERVER: EndlessSky-server-continuous-linux-x86_64.tar.gz
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
@@ -67,17 +68,28 @@ jobs:
           VCPKG_BINARY_SOURCES: "clear;files,${{ steps.vcpkg-cache.outputs.path }},readwrite"
       - name: Package Application
         run: ./utils/build_appimage.sh build/release
-      - name: Upload artifact
+      - name: Package dedicated server
+        run: |
+          mkdir -p server-package
+          cp build/release/endless-sky-server server-package/
+          tar -czf "${{ env.OUTPUT_SERVER }}" -C server-package .
+      - name: Upload application artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.OUTPUT }}
           path: ${{ env.OUTPUT }}
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_SERVER }}
+          path: ${{ env.OUTPUT_SERVER }}
 
   cd_windows_x64:
     name: Windows
     runs-on: windows-2025
     env:
       OUTPUT: EndlessSky-win64-continuous.zip
+      OUTPUT_SERVER: EndlessSky-server-continuous-win64.zip
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
@@ -121,17 +133,38 @@ jobs:
         run: |
           cmake --install build/release
           7z a ${{ env.OUTPUT }} "./install/release/*"
-      - name: Upload artifact
+      - name: Package dedicated server
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force server-package | Out-Null
+          Copy-Item build/release/endless-sky-server.exe server-package/
+          foreach($dll in @("libstdc++-6.dll", "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libgcc_s_dw2-1.dll"))
+          {
+            if(Test-Path "build/release/$dll")
+            {
+              Copy-Item "build/release/$dll" server-package/
+            }
+          }
+          Push-Location server-package
+          7z a "../${{ env.OUTPUT_SERVER }}" *
+          Pop-Location
+      - name: Upload application artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.OUTPUT }}
           path: ${{ env.OUTPUT }}
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_SERVER }}
+          path: ${{ env.OUTPUT_SERVER }}
 
   cd_macos_x64:
     name: MacOS
     runs-on: macos-15
     env:
       OUTPUT: EndlessSky-macOS-continuous.zip
+      OUTPUT_SERVER: EndlessSky-server-continuous-macos-x86_64.zip
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
@@ -173,11 +206,21 @@ jobs:
         run: |
           cmake --install build/release
           7z a ${{ env.OUTPUT }} "./install/release/*"
-      - name: Upload artifact
+      - name: Package dedicated server
+        run: |
+          mkdir -p server-package
+          cp build/release/endless-sky-server server-package/
+          (cd server-package && 7z a "../${{ env.OUTPUT_SERVER }}" *)
+      - name: Upload application artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.OUTPUT }}
           path: ${{ env.OUTPUT }}
+      - name: Upload server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUTPUT_SERVER }}
+          path: ${{ env.OUTPUT_SERVER }}
 
   cd_upload_artifacts_to_release:
     name: Upload
@@ -194,6 +237,9 @@ jobs:
       OUTPUT_APPIMAGE: Endless_Sky-continuous-x86_64.AppImage
       OUTPUT_WINDOWS: EndlessSky-win64-continuous.zip
       OUTPUT_MACOS: EndlessSky-macOS-continuous.zip
+      OUTPUT_SERVER_LINUX: EndlessSky-server-continuous-linux-x86_64.tar.gz
+      OUTPUT_SERVER_WINDOWS: EndlessSky-server-continuous-win64.zip
+      OUTPUT_SERVER_MACOS: EndlessSky-server-continuous-macos-x86_64.zip
     steps:
       - uses: actions/checkout@v5
         with:
@@ -258,3 +304,24 @@ jobs:
             --replace \
             --name ${{ env.OUTPUT_MACOS }} \
             --file ${{ env.OUTPUT_MACOS }}/${{ env.OUTPUT_MACOS }}
+      - name: Add ${{ env.OUTPUT_SERVER_LINUX }} to release tag
+        run: |
+          github-release upload \
+            --tag continuous \
+            --replace \
+            --name ${{ env.OUTPUT_SERVER_LINUX }} \
+            --file ${{ env.OUTPUT_SERVER_LINUX }}/${{ env.OUTPUT_SERVER_LINUX }}
+      - name: Add ${{ env.OUTPUT_SERVER_WINDOWS }} to release tag
+        run: |
+          github-release upload \
+            --tag continuous \
+            --replace \
+            --name ${{ env.OUTPUT_SERVER_WINDOWS }} \
+            --file ${{ env.OUTPUT_SERVER_WINDOWS }}/${{ env.OUTPUT_SERVER_WINDOWS }}
+      - name: Add ${{ env.OUTPUT_SERVER_MACOS }} to release tag
+        run: |
+          github-release upload \
+            --tag continuous \
+            --replace \
+            --name ${{ env.OUTPUT_SERVER_MACOS }} \
+            --file ${{ env.OUTPUT_SERVER_MACOS }}/${{ env.OUTPUT_SERVER_MACOS }}
