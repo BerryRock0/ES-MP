@@ -200,7 +200,7 @@ void GameData::FinishLoading()
 	for(const auto &it : Interfaces())
 	{
 		const Interface &interface = it.second;
-		for(const Interface::LayoutIdentity &identity : interface.LayoutIdentities())
+		for(const auto &identity : interface.LayoutIdentities())
 			layoutAliases.push_back({identity.panel, identity.canonical, identity.legacy});
 	}
 	UILayout::MigrateAliases(layoutAliases);
