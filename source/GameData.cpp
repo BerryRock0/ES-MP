@@ -199,7 +199,7 @@ void GameData::FinishLoading()
 	vector<UILayout::Alias> layoutAliases;
 	for(const auto &it : Interfaces())
 	{
-		const Interface &interface = it.second;
+		const auto &interface = it.second;
 		for(const auto &identity : interface.LayoutIdentities())
 			layoutAliases.push_back({identity.panel, identity.canonical, identity.legacy});
 	}
