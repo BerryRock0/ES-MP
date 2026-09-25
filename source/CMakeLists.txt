@@ -48,6 +48,10 @@ target_sources(EndlessSkyLib PRIVATE
 	CategoryList.cpp
 	CategoryList.h
 	CategoryType.h
+	CheatCommand.cpp
+	CheatCommand.h
+	CheatConsolePanel.cpp
+	CheatConsolePanel.h
 	ChatPanel.cpp
 	ChatPanel.h
 	ClickZone.h
@@ -375,8 +379,12 @@ target_sources(EndlessSkyLib PRIVATE
 	Trade.h
 	TradingPanel.cpp
 	TradingPanel.h
+	LayoutAssetPickerPanel.cpp
+	LayoutAssetPickerPanel.h
 	UI.cpp
 	UI.h
+	UILayout.cpp
+	UILayout.h
 	UniverseObjects.cpp
 	UniverseObjects.h
 	Variant.cpp

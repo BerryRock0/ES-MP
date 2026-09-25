@@ -30,6 +30,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 class GameModel;
 class PlayerInfo;
@@ -98,6 +99,13 @@ public:
 	void Update(double deltaTime);
 	void SendPlayerInput(uint32_t buttons, float thrust, float turn);
 	void SendChat(const std::string &text);
+	// Queue a slash command for execution by MainPanel on the game thread.
+	// Commands are client-authoritative and never sent as ordinary chat.
+	bool QueueCheatCommand(const std::string &text);
+	// Remove and return commands submitted through multiplayer chat.
+	std::vector<std::string> TakeQueuedCheatCommands();
+	// Surface a locally executed command result in the chat overlay/log.
+	void ReportCheatResult(const std::string &text);
 	// Report the local flagship's model. The session remembers the last
 	// reported name and only sends a message when it changes, so this is safe
 	// to call every frame.
@@ -157,6 +165,7 @@ private:
 	std::string reportedModel;
 	std::string nickname;
 	std::deque<ChatLine> chatLog;
+	std::deque<std::string> queuedCheatCommands;
 
 	// The last server this session successfully connected to (see
 	// HasLastServer()). Credentials are copied here only after login succeeds,

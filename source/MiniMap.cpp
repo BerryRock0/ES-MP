@@ -32,6 +32,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Set.h"
 #include "Ship.h"
 #include "System.h"
+#include "UILayout.h"
 
 #include <set>
 #include <vector>
@@ -148,7 +149,7 @@ void MiniMap::Step(const shared_ptr<Ship> &flagship)
 void MiniMap::Draw(int step) const
 {
 	const Ship *flagship = player.Flagship();
-	if(!flagship || !current)
+	if(!flagship || !current || !UILayout::IsVisible("HUD", "jump-map"))
 		return;
 
 	Preferences::MinimapDisplay pref = Preferences::GetMinimapDisplay();
@@ -169,7 +170,17 @@ void MiniMap::Draw(int step) const
 	Color lineColor(alpha, 0.f);
 	Color brightColor(.4f * alpha, 0.f);
 
-	const Point &drawPos = GameData::Interfaces().Get("hud")->GetPoint("mini-map");
+	const string layoutPanel = "HUD";
+	const string layoutElement = "jump-map";
+	const Interface *hud = GameData::Interfaces().Get("hud");
+	if(!hud->HasPoint("mini-map"))
+		return;
+	const Point drawPos = UILayout::Apply(layoutPanel, layoutElement,
+		hud->GetPoint("mini-map"));
+	UILayout::Register(layoutPanel, layoutElement,
+		Rectangle::FromCorner(drawPos - Point(120., 120.), Point(240., 240.)));
+	lineColor = UILayout::ApplyColor(layoutPanel, layoutElement, lineColor);
+	brightColor = UILayout::ApplyColor(layoutPanel, layoutElement, brightColor);
 	const Set<Color> &colors = GameData::Colors();
 	const Color &currentColor = colors.Get("active mission")->Additive(alpha * 2.f);
 	const Color &blockedColor = colors.Get("blocked mission")->Additive(alpha * 2.f);

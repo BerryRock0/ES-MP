@@ -16,6 +16,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 
 #include <string>
+#include <vector>
 
 class Sprite;
 
@@ -28,6 +29,10 @@ class SpriteSet {
 public:
 	// Get a pointer to the sprite data with the given name.
 	static const Sprite *Get(const std::string &name);
+	// Check whether an image with the given name is registered.
+	static bool Exists(const std::string &name);
+	// Return the registered sprite names in stable lexical order.
+	static std::vector<std::string> Names();
 
 	// Inspect the sprite map and warn if some images contain no data.
 	static void CheckReferences();

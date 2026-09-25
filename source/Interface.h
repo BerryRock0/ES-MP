@@ -55,6 +55,14 @@ public:
 	// Get a named list.
 	const std::vector<double> &GetList(const std::string &name) const;
 
+	// Legacy and semantic layout keys collected while loading this interface.
+	struct LayoutIdentity {
+		std::string panel;
+		std::string canonical;
+		std::string legacy;
+	};
+	const std::vector<LayoutIdentity> &LayoutIdentities() const { return layoutIdentities; }
+
 
 private:
 	class AnchoredPoint {
@@ -99,6 +107,17 @@ private:
 		Rectangle Bounds() const;
 		// Get the bounding rectangle, treating the Region within the Information as the screen area.
 		Rectangle Bounds(const Information &info) const;
+		// Get the bounds after applying this element's persistent layout style.
+		Rectangle LayoutBounds() const;
+		bool LayoutIsVisible() const;
+
+		// Set the persistent layout identity for this data-defined element.
+		void SetLayoutKey(const std::string &panel, const std::string &element,
+			const std::string &legacyElement = "");
+		const std::string &SemanticLayout() const { return semanticLayout; }
+
+	protected:
+		const std::string &EffectiveLayoutElement() const;
 
 	protected:
 		// Parse the given data line: one that is not recognized by Element
@@ -116,6 +135,10 @@ private:
 		AnchoredPoint from;
 		AnchoredPoint to;
 		Point alignment;
+		std::string layoutPanel;
+		std::string layoutElement;
+		std::string legacyLayoutElement;
+		std::string semanticLayout;
 		Point padding;
 		std::string visibleIf;
 		std::string activeIf;
@@ -272,6 +295,7 @@ private:
 
 private:
 	std::vector<std::unique_ptr<Element>> elements;
+	std::vector<LayoutIdentity> layoutIdentities;
 	std::map<std::string, Element> points;
 	std::map<std::string, double> values;
 	std::map<std::string, std::vector<double>> lists;

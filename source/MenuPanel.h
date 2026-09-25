@@ -47,6 +47,8 @@ protected:
 
 
 private:
+	// Whether the active game panel can safely be resumed from this menu.
+	bool CanEnterShip() const;
 	void DrawCredits() const;
 	// Disconnect the active multiplayer session from the main menu.
 	void DisconnectFromServer();

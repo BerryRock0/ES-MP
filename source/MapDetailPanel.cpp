@@ -53,6 +53,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "Trade.h"
 #include "text/Truncate.h"
 #include "UI.h"
+#include "UILayout.h"
 #include "Wormhole.h"
 
 #include <algorithm>
@@ -101,6 +102,7 @@ double MapDetailPanel::planetPanelHeight = 0.;
 MapDetailPanel::MapDetailPanel(PlayerInfo &player, const System *system, bool fromMission)
 	: MapPanel(player, system ? MapPanel::SHOW_REPUTATION : player.MapColoring(), system, fromMission)
 {
+	SetMapLayoutKey("MapDetailPanel", fromMission ? "mission" : "ports");
 	InitTextArea();
 }
 
@@ -109,6 +111,7 @@ MapDetailPanel::MapDetailPanel(PlayerInfo &player, const System *system, bool fr
 MapDetailPanel::MapDetailPanel(const MapPanel &panel, bool isStars)
 	: MapPanel(panel), isStars(isStars)
 {
+	SetMapLayoutKey("MapDetailPanel", isStars ? "stars" : "ports");
 	Audio::Pause();
 
 	// Use whatever map coloring is specified in the PlayerInfo.
@@ -170,6 +173,13 @@ double MapDetailPanel::PlanetPanelHeight()
 
 bool MapDetailPanel::Hover(int x, int y)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+	{
+		isPlanetViewSelected = false;
+		hoverSystem = nullptr;
+		tooltip.Clear();
+		return false;
+	}
 	const Interface *planetCardInterface = GameData::Interfaces().Get("map planet card");
 	isPlanetViewSelected = (x < Screen::Left() + planetCardInterface->GetValue("width")
 		&& y < Screen::Top() + PlanetPanelHeight());
@@ -183,6 +193,8 @@ bool MapDetailPanel::Hover(int x, int y)
 
 bool MapDetailPanel::Drag(double dx, double dy)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
 	if(scroll.Scrollable() && scrollbar.SyncDrag(scroll, dx, dy))
 		return true;
 
@@ -199,6 +211,8 @@ bool MapDetailPanel::Drag(double dx, double dy)
 
 bool MapDetailPanel::Scroll(double dx, double dy)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
 	if(isPlanetViewSelected)
 	{
 		scroll.Scroll(-dy * Preferences::ScrollSpeed());
@@ -213,6 +227,9 @@ bool MapDetailPanel::Scroll(double dx, double dy)
 // Only override the ones you need; the default action is to return false.
 bool MapDetailPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement)
+			&& key != SDLK_ESCAPE && key != 'd')
+		return false;
 	const double planetCardHeight = MapPlanetCard::Height();
 	if(command.Has(Command::HELP))
 	{
@@ -381,8 +398,36 @@ bool MapDetailPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command
 
 
 
+Point MapDetailPanel::OrbitCenter() const
+{
+	return Screen::TopRight() + Point(-120., 160.)
+		+ UILayout::Apply("MapDetailPanel", "orbits", Point());
+}
+
+
+
+Point MapDetailPanel::OrbitScale() const
+{
+	return UILayout::ApplyScale("MapDetailPanel", "orbits", Point(1., 1.));
+}
+
+
+
+Rectangle MapDetailPanel::OrbitBounds() const
+{
+	const Point scale = OrbitScale();
+	const Point radius(130. * scale.X(), 130. * scale.Y());
+	return Rectangle::FromCorner(OrbitCenter() - radius, radius + radius);
+}
+
+
+
 bool MapDetailPanel::Click(int x, int y, MouseButton button, int clicks)
 {
+	if(!UILayout::IsVisible(mapLayoutPanel, mapLayoutElement))
+		return false;
+	if(!UILayout::IsVisible("MapDetailPanel", "orbits"))
+		planets.clear();
 	if(scroll.Scrollable() && scrollbar.SyncClick(scroll, x, y, button, clicks))
 		return true;
 
@@ -391,14 +436,20 @@ bool MapDetailPanel::Click(int x, int y, MouseButton button, int clicks)
 		if(commodity == SHOW_STARS && !player.CanView(*selectedSystem))
 			return true;
 
-		// TODO: rewrite the map panels to be driven from interfaces.txt so these XY
-		// positions aren't hard-coded.
-		else if(x >= Screen::Right() - 240 && y >= Screen::Top() + 10 && y <= Screen::Top() + 270)
+		// The orbit display is a movable screen-space element.
+		if(!UILayout::IsVisible("MapDetailPanel", "orbits"))
+		{
+			planets.clear();
+			return true;
+		}
+		const Point orbitCenter = OrbitCenter();
+		if(OrbitBounds().Contains(Point(x, y)))
 		{
 			// Only handle clicks on the actual orbits element, rather than the whole UI region.
 			// (Note: this isn't perfect, and the clickable area extends into the angled sides a bit.)
-			const Point orbitCenter(Screen::TopRight() + Point(-120., 160.));
 			auto uiClick = Point(x, y) - orbitCenter;
+			const Point orbitScale = OrbitScale();
+			uiClick = Point(uiClick.X() / orbitScale.X(), uiClick.Y() / orbitScale.Y());
 			if(uiClick.Length() > 130)
 				return true;
 
@@ -461,7 +512,7 @@ bool MapDetailPanel::Click(int x, int y, MouseButton button, int clicks)
 		}
 		return true;
 	}
-	else if(x >= Screen::Right() - 240 && y <= Screen::Top() + 270)
+	else if(OrbitBounds().Contains(Point(x, y)))
 	{
 		// The player has clicked within the "orbits" scene.
 		// Select the nearest planet to the click point.
@@ -513,6 +564,7 @@ void MapDetailPanel::Resize()
 void MapDetailPanel::InitTextArea()
 {
 	description = make_shared<TextArea>();
+	description->SetLayoutKey("MapDetailPanel", "description");
 	description->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	description->SetColor(*GameData::Colors().Get("medium"));
 	description->SetAlignment(Preferences::GetTextAlignment());
@@ -978,13 +1030,21 @@ void MapDetailPanel::DrawInfo()
 // Draw the planet orbits in the currently selected system, on the current day.
 void MapDetailPanel::DrawOrbits()
 {
-	if(commodity == SHOW_STARS && !player.CanView(*selectedSystem))
+	const string layoutPanel = "MapDetailPanel";
+	const string layoutElement = "orbits";
+	planets.clear();
+	if(!UILayout::IsVisible(layoutPanel, layoutElement)
+			|| (commodity == SHOW_STARS && !player.CanView(*selectedSystem)))
 		return;
 
-	planets.clear();
+	const Point orbitOffset = UILayout::Apply(layoutPanel, layoutElement, Point());
+	const Point orbitScale = OrbitScale();
 	const Sprite *orbitSprite = SpriteSet::Get("ui/orbits and key");
-	SpriteShader::Draw(orbitSprite, Screen::TopRight() + .5 * Point(-orbitSprite->Width(), orbitSprite->Height()));
-	Point orbitCenter = Screen::TopRight() + Point(-120., 160.);
+	SpriteShader::Draw(orbitSprite,
+		Screen::TopRight() + .5 * Point(-orbitSprite->Width(), orbitSprite->Height()) + orbitOffset,
+		orbitScale, nullptr, 0.f);
+	const Point orbitCenter = OrbitCenter();
+	UILayout::Register(layoutPanel, layoutElement, OrbitBounds());
 
 	if(!player.CanView(*selectedSystem))
 		return;
@@ -1037,8 +1097,8 @@ void MapDetailPanel::DrawOrbits()
 		}
 
 		double radius = object.Distance() * scale;
-		RingShader::Draw(orbitCenter + parentPos * scale,
-			radius + .7, radius - .7,
+		RingShader::Draw(orbitCenter + parentPos * scale * orbitScale,
+			(radius + .7) * orbitScale.X(), (radius - .7) * orbitScale.X(),
 			habitColor[habit]);
 	}
 
@@ -1048,7 +1108,7 @@ void MapDetailPanel::DrawOrbits()
 		if(object.Radius() <= 0.)
 			continue;
 
-		Point pos = orbitCenter + object.Position() * scale;
+		Point pos = orbitCenter + object.Position() * scale * orbitScale;
 		// Special case: wormholes which would lead to an inaccessible location should not
 		// be drawn as landable.
 		bool hasPlanet = object.HasValidPlanet();
@@ -1063,7 +1123,7 @@ void MapDetailPanel::DrawOrbits()
 			: Radar::GetColor(object.RadarType(player.Flagship())).Get();
 		// Darken and saturate the color, and make it opaque.
 		Color color(max(0.f, rgb[0] * 1.2f - .2f), max(0.f, rgb[1] * 1.2f - .2f), max(0.f, rgb[2] * 1.2f - .2f), 1.f);
-		RingShader::Draw(pos, object.Radius() * scale + 1., 0.f, color);
+		RingShader::Draw(pos, (object.Radius() * scale + 1.) * orbitScale.X(), 0.f, color);
 	}
 
 	// If the player has a pending order for escorts to move to a new system, draw it.
@@ -1073,7 +1133,7 @@ void MapDetailPanel::DrawOrbits()
 		if(pendingOrder.first == selectedSystem)
 		{
 			// Draw an X (to mark the spot, of course).
-			auto uiPoint = (pendingOrder.second * scale) + orbitCenter;
+			auto uiPoint = (pendingOrder.second * scale) * orbitScale + orbitCenter;
 			const Color *color = GameData::Colors().Get("map orbits fleet destination");
 			// TODO: Add a "batch pointershader" method that takes
 			// the shape description, a count, and a reference point+orientation.
@@ -1094,15 +1154,16 @@ void MapDetailPanel::DrawOrbits()
 	// Draw the selection ring on top of everything else.
 	for(const StellarObject &object : selectedSystem->Objects())
 		if(selectedPlanet && object.GetPlanet() == selectedPlanet)
-			RingShader::Draw(orbitCenter + object.Position() * scale,
-				object.Radius() * scale + 5., object.Radius() * scale + 4.,
+			RingShader::Draw(orbitCenter + object.Position() * scale * orbitScale,
+				(object.Radius() * scale + 5.) * orbitScale.X(),
+				(object.Radius() * scale + 4.) * orbitScale.X(),
 				habitColor[6]);
 
 	// Draw the name of the selected planet.
 	const string &name = selectedPlanet ? selectedPlanet->DisplayName() : selectedSystem->DisplayName();
-	Point namePos(Screen::Right() - 190., Screen::Top() + 7.);
+	Point namePos = Point(Screen::Right() - 190., Screen::Top() + 7.) + orbitOffset;
 	font.Draw({name, {180, Alignment::CENTER, Truncate::BACK}},
-		namePos, *GameData::Colors().Get("medium"));
+		namePos, UILayout::ApplyColor(layoutPanel, layoutElement, *GameData::Colors().Get("medium")));
 }
 
 

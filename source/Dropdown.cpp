@@ -104,10 +104,10 @@ Point AlignText(Dropdown::ALIGN alignment, const Font &font, const Rectangle &po
 
 void Dropdown::Draw()
 {
-	Edit::Draw();
 	ClearZones();
-	if(!Visible())
+	if(!LayoutIsVisible() || !Visible())
 		return;
+	Edit::Draw();
 
 	if(showDropIcon || Edit::Enabled())
 	{
@@ -231,6 +231,8 @@ Dropdown::DroppedPanel::DroppedPanel(Dropdown *parent)
 
 void Dropdown::DroppedPanel::Draw()
 {
+	if(!dd->Visible() || !dd->LayoutIsVisible())
+		return;
 	const Font &font = FontSet::Get(dd->FontSize());
 	const Color &active = *GameData::Colors().Get("active");
 	const Color &inactive = *GameData::Colors().Get("inactive");
@@ -276,6 +278,8 @@ void Dropdown::DroppedPanel::Draw()
 
 bool Dropdown::DroppedPanel::Click(int x, int y, MouseButton, int clicks)
 {
+	if(!dd->Visible() || !dd->LayoutIsVisible())
+		return false;
 	mousePos = Point(x, y);
 
 	int idx = dd->IdxFromPoint(x, y);
@@ -291,6 +295,8 @@ bool Dropdown::DroppedPanel::Click(int x, int y, MouseButton, int clicks)
 
 bool Dropdown::DroppedPanel::Drag(double dx, double dy)
 {
+	if(!dd->Visible() || !dd->LayoutIsVisible())
+		return false;
 	mousePos += Point(dx, dy);
 	highlightIndex = dd->IdxFromPoint(mousePos.X(), mousePos.Y());
 
@@ -301,6 +307,8 @@ bool Dropdown::DroppedPanel::Drag(double dx, double dy)
 
 bool Dropdown::DroppedPanel::Release(int x, int y, MouseButton)
 {
+	if(!dd->Visible() || !dd->LayoutIsVisible())
+		return false;
 	// short click, leave it up. Long click, see what they selected
 	if(SDL_GetTicks() - clickStamp < 500)
 	{
@@ -323,6 +331,8 @@ bool Dropdown::DroppedPanel::Release(int x, int y, MouseButton)
 
 bool Dropdown::DroppedPanel::Hover(int x, int y)
 {
+	if(!dd->Visible() || !dd->LayoutIsVisible())
+		return false;
 	highlightIndex = dd->IdxFromPoint(x, y);
 	return true;
 }

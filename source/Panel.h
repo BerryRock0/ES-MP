@@ -27,6 +27,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include <SDL2/SDL.h>
 
+class Color;
 class Command;
 class Point;
 class Sprite;
@@ -101,6 +102,16 @@ public:
 	bool FocusNext();
 	// Move focus to the previous panel that wants it.
 	bool FocusPrev();
+
+	// Set a persistent layout identity for a movable child/control. Controls
+	// apply the stored offset when their normal rectangle is assigned.
+	void SetLayoutKey(const std::string &panel, const std::string &element);
+	bool HasLayoutKey() const;
+	Point LayoutPoint(const Point &normalPosition) const;
+	Rectangle LayoutRectangle(const Rectangle &normalRectangle) const;
+	bool LayoutIsVisible() const;
+	Color LayoutColor(const Color &fallback) const;
+	void RegisterLayoutRegion(const Rectangle &bounds) const;
 
 
 protected:
@@ -216,6 +227,8 @@ private:
 	std::vector<const Panel *> childrenToRemove;
 	Panel *parent = nullptr;
 	bool focus = false;
+	std::string layoutPanel;
+	std::string layoutElement;
 
 	friend class UI;
 };
@@ -225,6 +238,8 @@ private:
 template<typename ...FARGS, typename ...ARGS>
 bool Panel::EventVisit(bool (Panel::*f)(FARGS ...), ARGS ...args)
 {
+	if(!LayoutIsVisible())
+		return false;
 	// Check if a child panel will consume this event first.
 	for(auto it = children.rbegin(); it != children.rend(); ++it)
 		if((*it)->EventVisit(f, args...))

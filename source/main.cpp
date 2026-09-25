@@ -17,6 +17,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include "audio/Audio.h"
 #include "Command.h"
+#include "CheatConsolePanel.h"
 #include "Conversation.h"
 #include "CustomEvents.h"
 #include "DataFile.h"
@@ -56,6 +57,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "test/Test.h"
 #include "test/TestContext.h"
 #include "UI.h"
+#include "UILayout.h"
 
 #ifdef _WIN32
 #include "windows/TimerResolutionGuard.h"
@@ -176,6 +178,7 @@ int main(int argc, char *argv[])
 	try {
 		// Load plugin settings and preferences before game data.
 		Preferences::Load();
+		UILayout::Load();
 		PluginManager::LoadSettings();
 
 		TaskQueue queue;
@@ -288,6 +291,8 @@ int main(int argc, char *argv[])
 	Preferences::Set("fullscreen", GameWindow::IsFullscreen());
 	Screen::SetRaw(GameWindow::Width(), GameWindow::Height(), true);
 	Preferences::Save();
+	UILayout::CommitTransaction();
+	UILayout::Save();
 	PluginManager::Save();
 
 	Audio::Quit();
@@ -488,9 +493,19 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			}
 			else if(event.type == SDL_QUIT)
 				menuPanels.Quit();
-			else if(event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
-				// The window has been resized. Adjust the raw screen size and the OpenGL viewport to match.
-				GameWindow::AdjustViewport();
+			else if(event.type == SDL_WINDOWEVENT
+					&& (event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED
+						|| event.window.event == SDL_WINDOWEVENT_FOCUS_LOST
+						|| event.window.event == SDL_WINDOWEVENT_FOCUS_GAINED
+						|| event.window.event == SDL_WINDOWEVENT_MINIMIZED))
+			{
+				// A resize or focus transition can interrupt a mouse release;
+				// do not leave the layout editor stuck in a dragging state.
+				UILayout::CancelDrag();
+				UILayout::ClearRegions();
+				if(event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED)
+					GameWindow::AdjustViewport();
+			}
 			else if(event.type == CustomEvents::GetResize())
 			{
 				menuPanels.AdjustViewport();
@@ -513,6 +528,12 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 			else if(activeUI.Handle(event))
 			{
 				// The UI handled the event.
+			}
+			else if(event.type == SDL_KEYDOWN && !event.key.repeat && menuPanels.IsEmpty()
+					&& Command(event.key.keysym.sym).Has(Command::CHEATS))
+			{
+				gamePanels.Push(new CheatConsolePanel(player, gamePanels));
+				UI::PlaySound(UI::UISound::NORMAL);
 			}
 			else if(event.type == SDL_KEYDOWN && !event.key.repeat
 					&& (Command(event.key.keysym.sym).Has(Command::FASTFORWARD))
@@ -753,6 +774,10 @@ void GameLoop(PlayerInfo &player, TaskQueue &queue, const Conversation &conversa
 				gpuLoadSum = {};
 				isPerformanceDisplayReady = false;
 			}
+
+			// Draw the editor after auxiliary interfaces such as the performance
+			// display, which can register additional layout regions.
+			(menuPanels.IsEmpty() ? gamePanels : menuPanels).DrawLayoutEditor();
 
 			GameWindow::Step();
 

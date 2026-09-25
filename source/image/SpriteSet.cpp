@@ -38,6 +38,26 @@ const Sprite *SpriteSet::Get(const string &name)
 
 
 
+bool SpriteSet::Exists(const string &name)
+{
+	lock_guard<mutex> guard(modifyMutex);
+	return sprites.contains(name);
+}
+
+
+
+vector<string> SpriteSet::Names()
+{
+	lock_guard<mutex> guard(modifyMutex);
+	vector<string> names;
+	names.reserve(sprites.size());
+	for(const auto &it : sprites)
+		names.push_back(it.first);
+	return names;
+}
+
+
+
 void SpriteSet::CheckReferences()
 {
 	for(const auto &[name, sprite] : sprites)

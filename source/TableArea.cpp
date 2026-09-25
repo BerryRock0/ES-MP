@@ -129,7 +129,7 @@ void TableArea::DrawText(const Point &topLeft)
 	for(const vector<string> &row : rows)
 	{
 		for(size_t i = 0; i < row.size(); ++i)
-			table.Draw(row[i], *colors[i]);
+			table.Draw(row[i], LayoutColor(*colors[i]));
 		if(row.size() != columnCount)
 			table.Advance();
 	}

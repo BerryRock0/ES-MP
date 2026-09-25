@@ -108,6 +108,7 @@ HostPanel::HostPanel(PlayerInfo &player, UI &gamePanels, NetworkServer &server, 
 	port = std::to_string(NetworkProtocol::DEFAULT_PORT);
 
 	text = std::make_shared<TextArea>();
+	text->SetLayoutKey("HostPanel", "text");
 	text->SetAlignment(Preferences::GetTextAlignment());
 	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	// A host panel can also be opened to inspect/stop a server that was started

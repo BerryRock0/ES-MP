@@ -71,6 +71,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "SystemEntry.h"
 #include "test/Test.h"
 #include "UI.h"
+#include "UILayout.h"
 #include "Visual.h"
 #include "Weather.h"
 #include "Wormhole.h"
@@ -1439,21 +1440,30 @@ void Engine::Draw() const
 
 	// Draw the flagship's coordinates next to the minimap.
 	const Ship *flagship = player.Flagship();
-	if(flagship)
+	if(flagship && hud->HasPoint("mini-map")
+			&& UILayout::IsVisible("HUD", "coordinates"))
 	{
-		Point coordPos = hud->GetPoint("mini-map") + Point(90., -16.);
+		const string layoutPanel = "HUD";
+		const string layoutElement = "coordinates";
+		Point coordPos = hud->GetPoint("mini-map") + Point(90., -16.)
+			+ UILayout::Apply("HUD", "jump-map", Point())
+			+ UILayout::Apply(layoutPanel, layoutElement, Point());
 		string coord = to_string(static_cast<int>(flagship->Position().X()));
 		coord += ", " + to_string(static_cast<int>(flagship->Position().Y()));
-		font.Draw(coord, coordPos, Color(.8f, 1.f));
+		font.Draw(coord, coordPos, UILayout::ApplyColor(layoutPanel, layoutElement, Color(.8f, 1.f)));
+		UILayout::Register(layoutPanel, layoutElement,
+			Rectangle::FromCorner(coordPos, Point(max(1, font.Width(coord)), font.Height())));
 	}
 
 	// Draw ammo status.
 	double ammoIconWidth = hud->GetValue("ammo icon width");
 	double ammoIconHeight = hud->GetValue("ammo icon height");
-	ammoDisplay.Draw(hud->GetBox("ammo"), Point(ammoIconWidth, ammoIconHeight));
+	if(hud->HasPoint("ammo"))
+		ammoDisplay.Draw(hud->GetBox("ammo"), Point(ammoIconWidth, ammoIconHeight));
 
 	// Draw escort status.
-	escorts.Draw(hud->GetBox("escorts"));
+	if(hud->HasPoint("escorts"))
+		escorts.Draw(hud->GetBox("escorts"));
 }
 
 
@@ -1471,7 +1481,8 @@ void Engine::Click(const Point &from, const Point &to, bool hasShift, bool hasCo
 	const Interface *hud = GameData::Interfaces().Get("hud");
 	Point radarCenter = hud->GetPoint("radar");
 	double radarRadius = hud->GetValue("radar radius");
-	if(Preferences::Has("Clickable radar display") && (from - radarCenter).Length() <= radarRadius)
+	if(Preferences::Has("Clickable radar display") && hud->HasPoint("radar")
+			&& (from - radarCenter).Length() <= radarRadius)
 		isRadarClick = true;
 	else
 		isRadarClick = false;
@@ -1501,7 +1512,8 @@ void Engine::RightOrMiddleClick(const Point &point, MouseButton button)
 	const Interface *hud = GameData::Interfaces().Get("hud");
 	Point radarCenter = hud->GetPoint("radar");
 	double radarRadius = hud->GetValue("radar radius");
-	if(Preferences::Has("Clickable radar display") && (point - radarCenter).Length() <= radarRadius)
+	if(Preferences::Has("Clickable radar display") && hud->HasPoint("radar")
+			&& (point - radarCenter).Length() <= radarRadius)
 	{
 		double radarScale = hud->GetValue("radar scale");
 		clickPoint = (point - radarCenter) / radarScale;

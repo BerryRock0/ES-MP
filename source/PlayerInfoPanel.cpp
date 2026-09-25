@@ -828,6 +828,7 @@ void PlayerInfoPanel::DrawList(const vector<pair<string, int64_t>> &list, shared
 	if(!area)
 	{
 		area = make_shared<TableArea>();
+		area->SetLayoutKey("PlayerInfoPanel", title);
 		area->SetFontSize(14);
 		area->SetRect(Rectangle::FromCorner(topLeft, Point(width, height)));
 		area->AddColumn(0, {width, Alignment::LEFT}, dim);

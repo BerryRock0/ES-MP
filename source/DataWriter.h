@@ -30,7 +30,8 @@ class DataNode;
 // considered the "child" of the first line above it that is less indented. By
 // using this class, you can have a function add data to the file without having
 // to tell that function what indentation level it is at. This class also
-// automatically adds quotation marks around strings if they contain whitespace.
+// automatically adds quotation marks around strings if they contain whitespace
+// or start like an inline comment.
 class DataWriter {
 public:
 	// Constructor, specifying the file to write.

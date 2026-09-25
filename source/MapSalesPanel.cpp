@@ -60,6 +60,7 @@ MapSalesPanel::MapSalesPanel(PlayerInfo &player, bool isOutfitters)
 	collapsed(player.Collapsed(isOutfitters ? "outfitter map" : "shipyard map")),
 	loadingCircle(30.f, 10, 2.)
 {
+	SetMapLayoutKey("MapSalesPanel", isOutfitters ? "outfitters" : "shipyards");
 }
 
 
@@ -71,6 +72,7 @@ MapSalesPanel::MapSalesPanel(const MapPanel &panel, bool isOutfitters)
 	collapsed(player.Collapsed(isOutfitters ? "outfitter map" : "shipyard map")),
 	loadingCircle(30.f, 10, 2.)
 {
+	SetMapLayoutKey("MapSalesPanel", isOutfitters ? "outfitters" : "shipyards");
 	Audio::Pause();
 
 	commodity = SHOW_SPECIAL;

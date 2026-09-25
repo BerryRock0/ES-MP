@@ -194,6 +194,7 @@ MultiplayerPanel::MultiplayerPanel(MultiplayerInit init)
 	cancelText = "Cancel";
 
 	text = std::make_shared<TextArea>();
+	text->SetLayoutKey("MultiplayerPanel", "text");
 	text->SetAlignment(Preferences::GetTextAlignment());
 	text->SetFont(FontSet::Get(Preferences::GetFontSize()));
 	text->SetTruncate(init.truncate);

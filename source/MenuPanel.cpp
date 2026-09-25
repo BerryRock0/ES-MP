@@ -16,6 +16,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "MenuPanel.h"
 
 #include "audio/Audio.h"
+#include "CheatConsolePanel.h"
 #include "Command.h"
 #include "Files.h"
 #include "text/Font.h"
@@ -45,6 +46,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "StartConditionsPanel.h"
 #include "System.h"
 #include "UI.h"
+#include "UILayout.h"
 
 #include "opengl.h"
 
@@ -90,7 +92,9 @@ MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session
 			}
 		}
 		// Remove the last 15 lines, as there is already a gap at the beginning of the credits.
-		credits.resize(credits.size() - 15);
+		// A source may legitimately have no credits file, so do not underflow if all are empty.
+		if(!credits.empty())
+			credits.resize(credits.size() - 15);
 	}
 	else if(showCreditsWarning)
 	{
@@ -100,11 +104,12 @@ MenuPanel::MenuPanel(PlayerInfo &player, UI &gamePanels, NetworkSession &session
 
 	if(gamePanels.IsEmpty())
 	{
-		// This backdrop flight (the ship shown behind the menu) is not the
-		// player's game; mark it so a multiplayer login knows to replace it.
-		MainPanel *backdrop = new MainPanel(player);
-		backdrop->SetIsMenuBackdrop(true);
-		gamePanels.Push(backdrop);
+		// A recent local save is already a real, resumable flight. Only use a
+		// non-interactive backdrop when there is no local game to resume.
+		MainPanel *flight = new MainPanel(player);
+		flight->SetIsMenuBackdrop(!player.IsLoaded() || player.IsNetworkPilot()
+			|| player.IsNetworkAttached());
+		gamePanels.Push(flight);
 		// It takes one step to figure out the planet panel should be created, and
 		// another step to actually place it. So, take two steps to avoid a flicker.
 		gamePanels.StepAll();
@@ -189,6 +194,8 @@ void MenuPanel::Draw()
 		info.SetCondition("no pilot loaded");
 		info.SetString("pilot", "No Pilot Loaded");
 	}
+	if(CanEnterShip())
+		info.SetCondition("can enter ship");
 	if(player.Pilot() && !player.Pilot()->GetGamerules().LockGamerules())
 		info.SetCondition("gamerules unlocked");
 	if(session.IsNetworkMode())
@@ -216,9 +223,29 @@ void MenuPanel::Draw()
 
 
 
+bool MenuPanel::CanEnterShip() const
+{
+	if(!player.IsLoaded() || player.IsDead())
+		return false;
+
+	// Disconnecting replaces the departed server's flight with an empty menu
+	// backdrop. The pilot remains loaded only so the menu can display it and
+	// offer "Save World Locally"; resuming that backdrop would open an empty
+	// 0-credit game instead of the player's actual world.
+	const MainPanel *active = static_cast<const MainPanel *>(gamePanels.Root().get());
+	if(!active || active->IsMenuBackdrop())
+		return false;
+
+	// A network pilot is only resumable while its session is live. After an
+	// unexpected drop, reconnect or explicitly save it before entering a game.
+	return !player.IsNetworkPilot() || session.IsNetworkMode();
+}
+
+
+
 bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
-	if(player.IsLoaded() && (key == 'e' || command.Has(Command::MENU)))
+	if(CanEnterShip() && (key == 'e' || command.Has(Command::MENU)))
 	{
 		// A multiplayer flight may still be attached to a local pilot. Do not
 		// re-enable the normal save path while returning to the menu; the
@@ -249,6 +276,8 @@ bool MenuPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 		gamePanels.StepAll();
 		gamePanels.StepAll();
 	}
+	else if(command.Has(Command::CHEATS))
+		GetUI().Push(new CheatConsolePanel(player, gamePanels));
 	else if(key == 'p')
 		GetUI().Push(new PreferencesPanel(player));
 	else if(key == 'l' || key == 'm')
@@ -300,7 +329,9 @@ bool MenuPanel::Click(int x, int y, MouseButton button, int clicks)
 		return false;
 
 	// Double clicking on the credits pauses/resumes the credits scroll.
-	if(clicks == 2 && mainMenuUi->GetBox("credits").Contains(Point(x, y)))
+	const Rectangle creditsRect = mainMenuUi->GetBox("credits")
+		+ UILayout::Apply("MenuPanel", "contributors", Point());
+	if(clicks == 2 && creditsRect.Contains(Point(x, y)))
 	{
 		scrollingPaused = !scrollingPaused;
 		return true;
@@ -382,8 +413,14 @@ void MenuPanel::ClearNetworkWorld()
 
 void MenuPanel::DrawCredits() const
 {
+	if(!UILayout::IsVisible("MenuPanel", "contributors"))
+		return;
 	const Font &font = FontSet::Get(14);
-	const auto creditsRect = mainMenuUi->GetBox("credits");
+	const string layoutPanel = "MenuPanel";
+	const string layoutElement = "contributors";
+	const auto creditsRect = mainMenuUi->GetBox("credits")
+		+ UILayout::Apply(layoutPanel, layoutElement, Point());
+	UILayout::Register(layoutPanel, layoutElement, creditsRect);
 	const int top = static_cast<int>(creditsRect.Top());
 	const int bottom = static_cast<int>(creditsRect.Bottom());
 	int y = bottom + 5 - scroll / SCROLL_MOD;
@@ -397,7 +434,8 @@ void MenuPanel::DrawCredits() const
 		if(fade)
 		{
 			Color color(((line.empty() || line[0] == ' ') ? .2f : .4f) * fade, 0.f);
-			font.Draw(line, Point(creditsRect.Left(), y), color);
+			font.Draw(line, Point(creditsRect.Left(), y),
+				UILayout::ApplyColor(layoutPanel, layoutElement, color));
 		}
 		y += 20;
 	}

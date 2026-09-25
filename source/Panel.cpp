@@ -27,6 +27,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "image/Sprite.h"
 #include "shader/SpriteShader.h"
 #include "UI.h"
+#include "UILayout.h"
 
 #include <cassert>
 #include <deque>
@@ -90,6 +91,8 @@ bool Panel::IsInterruptible() const noexcept
 // Clear the list of clickable zones.
 void Panel::ClearZones()
 {
+	for(auto &child : children)
+		child->ClearZones();
 	zones.clear();
 }
 
@@ -98,6 +101,8 @@ void Panel::ClearZones()
 // Add a clickable zone to the panel.
 void Panel::AddZone(const Rectangle &rect, const function<void()> &fun)
 {
+	if(!LayoutIsVisible())
+		return;
 	// The most recently added zone will typically correspond to what was drawn
 	// most recently, so it should be on top.
 	zones.emplace_front(rect, fun);
@@ -108,6 +113,8 @@ void Panel::AddZone(const Rectangle &rect, const function<void()> &fun)
 // Add a clickable zone to the panel.
 void Panel::AddZone(const Rectangle &rect, const function<void(const Event &)> &fun)
 {
+	if(!LayoutIsVisible())
+		return;
 	// The most recently added zone will typically correspond to what was drawn
 	// most recently, so it should be on top.
 	zones.emplace_front(rect, fun);
@@ -126,6 +133,8 @@ void Panel::AddZone(const Rectangle &rect, SDL_Keycode key)
 // so, apply that zone's action and return true.
 bool Panel::ZoneClick(const Point &point)
 {
+	if(!LayoutIsVisible())
+		return false;
 	for(auto it = children.rbegin(); it != children.rend(); ++it)
 	{
 		if((*it)->ZoneClick(point))
@@ -258,6 +267,8 @@ void Panel::Resize()
 
 bool Panel::SetFocus(bool newFocus)
 {
+	if(newFocus && !LayoutIsVisible())
+		return false;
 	if(newFocus)
 	{
 		if(!focus)
@@ -312,7 +323,7 @@ bool Panel::FocusNext()
 	while(currentFocusIdx != idx)
 	{
 		Panel *p = all[idx];
-		if(p->SetFocus(true))
+		if(p->LayoutIsVisible() && p->SetFocus(true))
 			return true;
 
 		++idx;
@@ -345,7 +356,7 @@ bool Panel::FocusPrev()
 	while(currentFocusIdx != idx)
 	{
 		Panel *p = all[idx];
-		if(p->SetFocus(true))
+		if(p->LayoutIsVisible() && p->SetFocus(true))
 			return true;
 
 		--idx;
@@ -369,10 +380,18 @@ bool Panel::FocusPrev()
 
 bool Panel::DoKeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+	if(!LayoutIsVisible())
+	{
+		if(focus)
+			SetFocus(false);
+		return false;
+	}
 	// If a child has focus, don't let anybody else see the keystroke.
 	for(auto &c : children)
 	{
-		if(c->HasFocus())
+		if(c->HasFocus() && !c->LayoutIsVisible())
+			c->SetFocus(false);
+		else if(c->HasFocus() && c->LayoutIsVisible())
 			return c->KeyDown(key, mod, command, isNewPress);
 	}
 
@@ -418,10 +437,18 @@ bool Panel::DoScroll(double dx, double dy)
 
 bool Panel::DoTextInput(const string &text)
 {
+	if(!LayoutIsVisible())
+	{
+		if(focus)
+			SetFocus(false);
+		return false;
+	}
 	// If a child has focus, don't let anybody else see the text.
 	for(auto &c : children)
 	{
-		if(c->HasFocus())
+		if(c->HasFocus() && !c->LayoutIsVisible())
+			c->SetFocus(false);
+		else if(c->HasFocus() && c->LayoutIsVisible())
 			return c->TextInput(text);
 	}
 	return Panel::TextInput(text);
@@ -432,8 +459,9 @@ bool Panel::DoTextInput(const string &text)
 void Panel::DoDraw()
 {
 	Draw();
-	for(auto &child : children)
-		child->DoDraw();
+	if(LayoutIsVisible())
+		for(auto &child : children)
+			child->DoDraw();
 }
 
 
@@ -452,6 +480,60 @@ void Panel::DoUpdateTextDisplay()
 	UpdateTextDisplay();
 	for(auto &child : children)
 		child->DoUpdateTextDisplay();
+}
+
+
+
+void Panel::SetLayoutKey(const string &panel, const string &element)
+{
+	layoutPanel = panel;
+	layoutElement = element;
+}
+
+
+
+bool Panel::HasLayoutKey() const
+{
+	return !layoutPanel.empty() && !layoutElement.empty();
+}
+
+
+
+Point Panel::LayoutPoint(const Point &normalPosition) const
+{
+	return HasLayoutKey() ? UILayout::Apply(layoutPanel, layoutElement, normalPosition) : normalPosition;
+}
+
+
+
+Rectangle Panel::LayoutRectangle(const Rectangle &normalRectangle) const
+{
+	return HasLayoutKey()
+		? Rectangle(LayoutPoint(normalRectangle.Center()),
+			UILayout::ApplyScale(layoutPanel, layoutElement, normalRectangle.Dimensions()))
+		: normalRectangle;
+}
+
+
+
+void Panel::RegisterLayoutRegion(const Rectangle &bounds) const
+{
+	if(HasLayoutKey() && LayoutIsVisible())
+		UILayout::Register(layoutPanel, layoutElement, bounds);
+}
+
+
+
+bool Panel::LayoutIsVisible() const
+{
+	return !HasLayoutKey() || UILayout::IsVisible(layoutPanel, layoutElement);
+}
+
+
+
+Color Panel::LayoutColor(const Color &fallback) const
+{
+	return HasLayoutKey() ? UILayout::ApplyColor(layoutPanel, layoutElement, fallback) : fallback;
 }
 
 

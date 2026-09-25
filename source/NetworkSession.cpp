@@ -15,12 +15,25 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 
 #include "NetworkSession.h"
 
+#include "CheatCommand.h"
 #include "GameModel.h"
 #include "PlayerInfo.h"
 
+#include <cctype>
 #include <memory>
 #include <string>
 #include <utility>
+
+namespace
+{
+	bool IsSlashCommand(const std::string &text)
+	{
+		size_t first = 0;
+		while(first < text.size() && std::isspace(static_cast<unsigned char>(text[first])))
+			++first;
+		return first < text.size() && text[first] == '/';
+	}
+}
 
 NetworkSession::NetworkSession(GameModel &game, PlayerInfo &player) : game(game), player(player)
 {
@@ -42,6 +55,8 @@ bool NetworkSession::Connect(const std::string &host, uint16_t port,
 	const bool oldClientWasConnected = client && client->IsConnected();
 	if(client)
 		Disconnect();
+	else
+		queuedCheatCommands.clear();
 	if(preserveReturn && !oldClientWasConnected)
 		disconnectedDeliberately = false;
 
@@ -151,6 +166,7 @@ void NetworkSession::Disconnect()
 	hasWorldInfo = false;
 	savedPilot.clear();
 	hasSavedPilot = false;
+	queuedCheatCommands.clear();
 	pendingAddress.clear();
 	pendingPort = 0;
 	pendingNickname.clear();
@@ -306,6 +322,7 @@ void NetworkSession::Poll()
 		hasWorldInfo = false;
 		savedPilot.clear();
 		hasSavedPilot = false;
+		queuedCheatCommands.clear();
 		if(wasAuthenticating)
 			player.SetNetworkMode(false);
 		// The drop ends this session's claim on the active flight, so a later
@@ -348,6 +365,38 @@ void NetworkSession::SendPlayerInput(uint32_t buttons, float thrust, float turn)
 
 void NetworkSession::SendChat(const std::string &text)
 {
+	// Slash input is a private command channel. Intercept every slash-prefixed
+	// line, including an unknown command, so it is never accidentally broadcast
+	// as ordinary multiplayer chat.
+	if(IsSlashCommand(text))
+	{
+		// Help is safe and deterministic, so answer it locally even while
+		// reconnecting. Each line is recorded separately to keep multiline output
+		// readable in the chat overlay and message log.
+		if(CheatCommand::IsHelpCommand(text))
+		{
+			for(const std::string &line : CheatCommand::HelpLines())
+			{
+				RecordChat("Cheats", line);
+				if(chatHandler)
+					chatHandler("Cheats", line);
+			}
+			return;
+		}
+		if(state != State::Connected || !client)
+		{
+			ReportCheatResult("Commands require an active multiplayer connection.");
+			return;
+		}
+		if(!CheatCommand::IsCommand(text, true))
+		{
+			ReportCheatResult("Unknown command. Use /help for the command list.");
+			return;
+		}
+		QueueCheatCommand(text);
+		return;
+	}
+
 	if(state != State::Connected || !client)
 		return;
 
@@ -359,6 +408,40 @@ void NetworkSession::SendChat(const std::string &text)
 	if(chatHandler)
 		chatHandler(nickname, text);
 	client->SendChat(text);
+}
+
+
+
+bool NetworkSession::QueueCheatCommand(const std::string &text)
+{
+	if(state != State::Connected || !client || !CheatCommand::IsCommand(text, true))
+		return false;
+	constexpr size_t MAX_PENDING_COMMANDS = 32;
+	if(queuedCheatCommands.size() >= MAX_PENDING_COMMANDS)
+	{
+		ReportCheatResult("Too many commands are waiting; try again shortly.");
+		return false;
+	}
+	queuedCheatCommands.push_back(text);
+	return true;
+}
+
+
+
+std::vector<std::string> NetworkSession::TakeQueuedCheatCommands()
+{
+	std::vector<std::string> commands(queuedCheatCommands.begin(), queuedCheatCommands.end());
+	queuedCheatCommands.clear();
+	return commands;
+}
+
+
+
+void NetworkSession::ReportCheatResult(const std::string &text)
+{
+	RecordChat("Cheats", text);
+	if(chatHandler)
+		chatHandler("Cheats", text);
 }
 
 void NetworkSession::SendShipModel(const std::string &model)
@@ -448,6 +531,7 @@ void NetworkSession::HandleLogin(bool accepted, const std::string &reason, uint3
 		hasWorldInfo = false;
 		savedPilot.clear();
 		hasSavedPilot = false;
+		queuedCheatCommands.clear();
 		lastError = reason.empty() ? "Login rejected." : reason;
 		if(errorHandler)
 			errorHandler(lastError);
@@ -492,6 +576,7 @@ void NetworkSession::HandleDisconnect(const std::string &reason)
 	hasWorldInfo = false;
 	savedPilot.clear();
 	hasSavedPilot = false;
+	queuedCheatCommands.clear();
 	pendingAddress.clear();
 	pendingPort = 0;
 	pendingNickname.clear();

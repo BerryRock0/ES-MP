@@ -154,12 +154,14 @@ string DataWriter::Quote(const string &a)
 	bool hasSpace = any_of(a.begin(), a.end(), [](unsigned char c) { return isspace(c); });
 	bool hasQuote = any_of(a.begin(), a.end(), [](char c) { return (c == '"'); });
 	bool hasBacktick = any_of(a.begin(), a.end(), [](char c) { return (c == '`'); });
+	// A leading '#' starts an inline comment unless the token is quoted.
+	bool hasComment = !a.empty() && a.front() == '#';
 	// If the token is an empty string, it needs to be wrapped in quotes as if it had a space.
 	hasSpace |= a.empty();
 
 	if(hasQuote)
 		return '`' + a + '`';
-	else if(hasSpace || hasBacktick)
+	else if(hasSpace || hasBacktick || hasComment)
 		return '"' + a + '"';
 	else
 		return a;

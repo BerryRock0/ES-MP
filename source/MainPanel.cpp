@@ -20,6 +20,7 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "comparators/ByGivenOrder.h"
 #include "CategoryList.h"
 #include "ChatPanel.h"
+#include "CheatCommand.h"
 #include "Color.h"
 #include "CoreStartData.h"
 #include "DialogPanel.h"
@@ -36,7 +37,6 @@ this program. If not, see <https://www.gnu.org/licenses/>.
 #include "MessageLogPanel.h"
 #include "Messages.h"
 #include "Mission.h"
-#include "MultiplayerPanel.h"
 #include "NetworkSession.h"
 #include "Planet.h"
 #include "PlanetPanel.h"
@@ -75,6 +75,22 @@ MainPanel::MainPanel(PlayerInfo &player, GameModel *game, NetworkSession *sessio
 void MainPanel::Step()
 {
 	engine.Wait();
+
+	// Keep the per-ship cheat flag in sync with the persisted condition. This
+	// makes god mode survive a pilot reload as well as ships granted later.
+	const bool godMode = player.Conditions().Get("cheat: god mode") != 0;
+	for(const shared_ptr<Ship> &ship : player.Ships())
+		if(ship->GodMode() != godMode)
+			ship->SetGodMode(godMode);
+
+	// Chat input is handled between frames, so execute queued commands only
+	// after the engine worker has stopped. This keeps every multiplayer cheat
+	// on the same thread as the rest of the game-state mutations.
+	if(session && session->IsLoggedIn() && !isMenuBackdrop)
+	{
+		for(const string &command : session->TakeQueuedCheatCommands())
+			session->ReportCheatResult(CheatCommand::Execute(player, GetUI(), command, this));
+	}
 
 	// Depending on what UI element is on top, the game is "paused." This
 	// checks only already-drawn panels.
@@ -256,10 +272,10 @@ void MainPanel::DrawNetworkPlayers()
 // multiplayer lobby instead, so the player can connect to a server and chat.
 void MainPanel::DrawChatButton()
 {
-	// The in-game main panel always has the live network session attached
-	// (single-player flights included), so the chat button is always visible
-	// during a flight. Only the main menu's backdrop panels have no session.
-	if(!session)
+	// Only show chat while there is an active session to chat through or a
+	// remembered server to return to. In particular, the in-flight Chat button
+	// must not open the connection dialog for an ordinary single-player game.
+	if(!session || (!session->IsLoggedIn() && !session->HasLastServer()))
 	{
 		chatButtonRect = Rectangle();
 		return;
@@ -350,6 +366,11 @@ bool MainPanel::IsMenuBackdrop() const noexcept
 // Only override the ones you need; the default action is to return false.
 bool MainPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, bool isNewPress)
 {
+	// The menu backdrop is only a visual placeholder. It must never become an
+	// interactive, empty game if a menu transition goes wrong.
+	if(isMenuBackdrop)
+		return true;
+
 	if(player.IsDead())
 		return true;
 
@@ -393,6 +414,10 @@ bool MainPanel::KeyDown(SDL_Keycode key, Uint16 mod, const Command &command, boo
 
 bool MainPanel::Click(int x, int y, MouseButton button, int clicks)
 {
+	// The menu backdrop is not a playable flight and must not accept input.
+	if(isMenuBackdrop)
+		return true;
+
 	switch(button)
 	{
 		case MouseButton::MIDDLE:
@@ -405,16 +430,12 @@ bool MainPanel::Click(int x, int y, MouseButton button, int clicks)
 			return false;
 	}
 
-	// Clicking the "Chat" button in the bottom-right corner opens the chat:
-	// the in-game chat overlay while connected (or with a remembered server
-	// to return to), and otherwise the multiplayer lobby, so the player can
-	// connect to a server and chat there.
-	if(chatButtonRect.Contains(Point(x, y)))
+	// Clicking the "Chat" button in the bottom-right corner opens the chat
+	// overlay only when a session is active or can be returned to. Connecting
+	// remains an explicit action from the main menu.
+	if(session && chatButtonRect.Contains(Point(x, y)))
 	{
-		if(session->IsLoggedIn() || session->HasLastServer())
-			GetUI().Push(new ChatPanel(*session));
-		else
-			GetUI().Push(new MultiplayerPanel(*session, GetUI()));
+		GetUI().Push(new ChatPanel(*session));
 		return true;
 	}
 
